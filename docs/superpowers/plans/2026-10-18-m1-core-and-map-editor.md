@@ -14,7 +14,7 @@
 - Linux (CachyOS), Tauri подтверждён владельцем; путь проекта содержит кириллицу — проекты пользователя тоже могут лежать в путях с кириллицей и пробелами.
 - `core` не зависит от Pixi, React, Tauri и Node API; доступ к файлам только через `ProjectStorage`.
 - У каждого JSON-файла проекта поле `schemaVersion` (в M1 равно 1); карта имеет `viewMode` (единственное значение `"topdown"`); неизвестные ключи при загрузке сохраняются и записываются обратно (никакой тихой потери данных из более новых файлов).
-- Все сообщения пользователю на русском простым языком; идентификаторы английские.
+- Все сообщения пользователю и тексты интерфейса — на **английском** простым языком (решение владельца 2026-10-18: проект международный; русский добавим позже вторым языком через словарь строк); идентификаторы английские. Русские фрагменты сообщений, процитированные в шагах ниже, исполнитель переводит на английский, а тесты проверяют английские эквиваленты (глоссарий: `layer size` → `layer size`, `update NestST` → `update NestST`, слой `Ground` → `Ground`). Кириллица остаётся только в тестовых данных (имена проектов, пути) для проверки Unicode.
 - Никакой тихой перезаписи: запись файла атомарная (временный файл + переименование); при ошибке старый файл остаётся.
 - Служебные команды замеров и сбоя графики (`is_bench`, `is_gpufail`, `report_metric`, `exit_app`) не попадают в релиз-сборку редактора.
 - Лицензия MIT; секретов в репозитории нет; ИИ в M1 не используется.
@@ -29,9 +29,9 @@
 - Прототипы `prototypes/m0` и `prototypes/m0-electron` не удаляются и не правятся.
 
 ## Review Focus
-1. Повреждённый или пустой JSON-файл карты/манифеста: загрузка отказывает русским сообщением с именем файла, остальные файлы не затрагиваются (Задача 4).
+1. Повреждённый или пустой JSON-файл карты/манифеста: загрузка отказывает понятным английским сообщением с именем файла, остальные файлы не затрагиваются (Задача 4).
 2. Прерванное сохранение (ошибка записи посреди проекта): проект остаётся читаемым, ни один файл не записан наполовину (каждый целиком старый или целиком новый; смешение старого манифеста с новой картой допустимо и не ломает загрузку) (Задачи 4, 7).
-3. Файл из более новой версии формата (`schemaVersion` больше текущей): отказ с понятным текстом «обновите NestST», без искажения файла; неизвестные ключи внутри текущей версии переживают загрузку и сохранение (Задачи 2–3).
+3. Файл из более новой версии формата (`schemaVersion` больше текущей): отказ с понятным текстом `update NestST`, без искажения файла; неизвестные ключи внутри текущей версии переживают загрузку и сохранение (Задачи 2–3).
 4. Операции рисования с координатами вне карты, отрицательными, нецелыми или с id плитки больше 255, а также `undo` на пустой истории: отказ или пустая операция без падения (Задача 5).
 5. Имя проекта с кириллицей, пробелами и спецсимволами, пустое имя, и `id` карты с `../` или `/`: проект создаётся и открывается из такой папки, небезопасный `id` отклоняется (Задачи 2, 4, 6).
 
@@ -62,15 +62,15 @@
 **Interfaces:** Produces:
 - `const CURRENT_SCHEMA_VERSION = 1`, `const MAX_TILE_ID = 255`
 - zod-схемы и выведенные типы (`z.infer`, без ручных дублей): `TileLayer {id: string; name: string; visible: boolean; tiles: number[]}`, `GameMap {schemaVersion: 1; id: string; name: string; viewMode: 'topdown'; width: number; height: number; tileSize: number; layers: TileLayer[]}`, `ProjectManifest {schemaVersion: 1; name: string; resolution: {width: number; height: number}; tileSize: number; maps: {id: string; file: string}[]; startMapId: string}`
-- `class NestError extends Error {code: string; file?: string}` — все сообщения на русском
+- `class NestError extends Error {code: string; file?: string}` — все сообщения на английском
 - `parseMap(raw: unknown, file?: string): GameMap`, `parseManifest(raw: unknown, file?: string): ProjectManifest` — бросают `NestError`
-- Схемы используют `.loose()` (неизвестные ключи сохраняются), русские тексты ошибок для **каждого** поля через общую карту ошибок zod (не только `id`/`kind`).
+- Схемы используют `.loose()` (неизвестные ключи сохраняются), английские тексты ошибок для **каждого** поля через общую карту ошибок zod (не только `id`/`kind`).
 
-- [ ] **Step 1: Write the failing tests** (`schema.test.ts`): валидная карта 4×3 с двумя слоями проходит; `layers[].tiles.length !== width*height` → сообщение содержит «размер слоя»; `width: 0`, `width: 2049`, нецелое `width`, id плитки `256` и `-1` → `NestError` на русском (проверять, что сообщение не содержит английских слов вроде «Invalid» или «expected»); `viewMode: 'sideview'` → отказ; `id: '../x'`, `id: 'A'`, пустой `id` → отказ; неизвестный ключ `extra: 1` на карте и в слое сохраняется в результате `parseMap`; `maps[].file` должен быть `maps/<id>.json` и `startMapId` обязан быть среди `maps` → отказ с понятным текстом.
+- [ ] **Step 1: Write the failing tests** (`schema.test.ts`): валидная карта 4×3 с двумя слоями проходит; `layers[].tiles.length !== width*height` → сообщение содержит `layer size`; `width: 0`, `width: 2049`, нецелое `width`, id плитки `256` и `-1` → `NestError` с нашим собственным текстом (проверять, что сообщение не содержит стандартных фраз zod: `Invalid input`, `expected`, `received`, `Too small`, `Too big`; и что в нём есть имя поля); `viewMode: 'sideview'` → отказ; `id: '../x'`, `id: 'A'`, пустой `id` → отказ; неизвестный ключ `extra: 1` на карте и в слое сохраняется в результате `parseMap`; `maps[].file` должен быть `maps/<id>.json` и `startMapId` обязан быть среди `maps` → отказ с понятным текстом.
 - [ ] **Step 2: Run** `pnpm -F @nestst/core test` — FAIL.
-- [ ] **Step 3: Implement** схемы и `parseMap`/`parseManifest`; ошибки собираются из первой проблемы с путём к полю по-русски («в карте «<имя>», поле width: должно быть целое число от 1 до 2048»).
+- [ ] **Step 3: Implement** схемы и `parseMap`/`parseManifest`; ошибки собираются из первой проблемы с путём к полю по-английски (например `in map "<name>", field width: must be a whole number from 1 to 2048`).
 - [ ] **Step 4: Run** — PASS.
-- [ ] **Step 5: Commit** — `feat(core): versioned project schemas with Russian errors`.
+- [ ] **Step 5: Commit** — `feat(core): versioned project schemas with clear English errors`.
 
 ### Task 3: Миграции и защита от более новых версий
 **Files:** Create `packages/core/src/migrate.ts`, `packages/core/src/migrate.test.ts`.
@@ -87,7 +87,7 @@
 **Interfaces:** Consumes: `parseMap`, `parseManifest`, `migrateRaw`. Produces:
 - `interface ProjectStorage { read(path: string): Promise<string>; writeAtomic(path: string, data: string): Promise<void>; exists(path: string): Promise<boolean> }` — пути относительные, с `/`
 - `interface Project { manifest: ProjectManifest; maps: Record<string, GameMap> }`
-- `createEmptyProject(name: string): Project` — пустое имя → `NestError`; одна карта `main` 32×24, один слой «Земля», `tileSize: 32`, `resolution {1280, 720}`, `startMapId: 'main'`
+- `createEmptyProject(name: string): Project` — пустое имя → `NestError`; одна карта `main` 32×24, один слой `Ground`, `tileSize: 32`, `resolution {1280, 720}`, `startMapId: 'main'`
 - `saveProject(storage: ProjectStorage, project: Project): Promise<void>` — сначала все карты, **манифест последним**; перед записью проверяет все данные схемами
 - `loadProject(storage: ProjectStorage): Promise<Project>` — читает манифест, затем карты, каждый файл через `migrateRaw` и `parse*`; ошибки содержат имя файла
 - `NodeFsStorage(rootDir: string): ProjectStorage` в `nodeStorage.ts` (для тестов, `node:fs`, запись через временный файл + `rename`) и `MemoryStorage` (Map в памяти, с возможностью «сломать» запись на N-м вызове)
@@ -125,7 +125,7 @@
 ### Task 7: Файловые команды Tauri и безопасность оболочки
 **Files:** Create `apps/editor/src-tauri/src/files.rs`, tests inline (`#[cfg(test)]`), `apps/editor/src-tauri/Cargo.toml`, `tauri.conf.json`, `capabilities/default.json`, `src/lib.rs`, `src/main.rs`.
 
-**Interfaces:** Produces Tauri-команды: `open_project_dialog() -> Option<String>` и `new_project_dialog() -> Option<String>` (папка через `tauri-plugin-dialog`; корень запоминается в состоянии приложения), `project_read(path: String) -> Result<String, String>`, `project_write_atomic(path: String, data: String) -> Result<(), String>`, `project_exists(path: String) -> Result<bool, String>`. Функция `resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, String>` — отвергает абсолютные пути, `..`, пустые сегменты, обратный слеш; сообщения на русском. Запись: временный файл рядом + `fsync` + `rename`. `csp` задан строго (`default-src 'self'`, картинки `'self' data: blob:`, без `unsafe-eval`). Команды замеров/сбоя графики из M0 в приложение редактора **не переносятся**.
+**Interfaces:** Produces Tauri-команды: `open_project_dialog() -> Option<String>` и `new_project_dialog() -> Option<String>` (папка через `tauri-plugin-dialog`; корень запоминается в состоянии приложения), `project_read(path: String) -> Result<String, String>`, `project_write_atomic(path: String, data: String) -> Result<(), String>`, `project_exists(path: String) -> Result<bool, String>`. Функция `resolve_in_root(root: &Path, rel: &str) -> Result<PathBuf, String>` — отвергает абсолютные пути, `..`, пустые сегменты, обратный слеш; сообщения на английском. Запись: временный файл рядом + `fsync` + `rename`. `csp` задан строго (`default-src 'self'`, картинки `'self' data: blob:`, без `unsafe-eval`). Команды замеров/сбоя графики из M0 в приложение редактора **не переносятся**.
 
 - [ ] **Step 1: Write the failing Rust tests:** `resolve_in_root` отвергает `../x`, `/etc/passwd`, `a/../../b`, `a\\b`, пустую строку; принимает `maps/main.json`, `maps/кириллица.json`; `project_write_atomic` создаёт недостающие папки, перезаписывает файл целиком, при ошибке (запись в несуществующий корень) оставляет старый файл нетронутым.
 - [ ] **Step 2: Run** `cargo test` в `apps/editor/src-tauri` — FAIL (функции нет).
@@ -138,10 +138,10 @@
 
 **Interfaces:** Consumes: `@nestst/core` (`createEmptyProject`, `loadProject`, `saveProject`, `paintTiles`, `paintCommand`, `History`, `NestError`), `@nestst/runtime` (`createTileMapView`, `createBuiltinTileset`), команды Tauri из Задачи 7. Produces:
 - `TauriStorage implements ProjectStorage` (`tauriStorage.ts`)
-- `createEditorStore(storage: ProjectStorage)` (чистая логика без React, тестируется): состояние `{project: Project | null; currentMapId; tool: 'brush' | 'eraser'; selectedTile: number; dirty: boolean; error: string | null}` и действия `newProject(name)`, `open()`, `save()`, `paintStroke(edits: TileEdit[])`, `undo()`, `redo()`, `selectTool`, `selectTile`; `dirty` истинно после правки и ложно после успешного сохранения; ошибки превращаются в `error` на русском, программа не падает
+- `createEditorStore(storage: ProjectStorage)` (чистая логика без React, тестируется): состояние `{project: Project | null; currentMapId; tool: 'brush' | 'eraser'; selectedTile: number; dirty: boolean; error: string | null}` и действия `newProject(name)`, `open()`, `save()`, `paintStroke(edits: TileEdit[])`, `undo()`, `redo()`, `selectTool`, `selectTile`; `dirty` истинно после правки и ложно после успешного сохранения; ошибки превращаются в `error` на английском, программа не падает
 - UI: стартовый экран (создать, открыть); редактор: карта по центру с зумом колесом и панорамой средней кнопкой/пробелом, палитра плиток слева (255 → показывать первые 32), кисть и ластик, Ctrl+Z/Ctrl+Shift+Z, Ctrl+S, индикатор «есть несохранённые изменения» в заголовке, баннер ошибки с текстом простым языком; при закрытии с несохранёнными изменениями — запрос подтверждения
 
-- [ ] **Step 1: Write the failing tests** (`editorStore.test.ts`, `MemoryStorage` из core, happy-dom не нужен): `newProject` → `dirty` false; `paintStroke` → `dirty` true и `undo` возвращает карту к исходной; `save` → `dirty` false и повторная `open` читает равный проект; ошибка записи (сломанное хранилище) → `error` непустой на русском, `dirty` остаётся true, проект не потерян; `paintStroke` с координатой вне карты → `error`, проект не изменился; `open` по повреждённому файлу → `error` с именем файла, текущий проект не заменён.
+- [ ] **Step 1: Write the failing tests** (`editorStore.test.ts`, `MemoryStorage` из core, happy-dom не нужен): `newProject` → `dirty` false; `paintStroke` → `dirty` true и `undo` возвращает карту к исходной; `save` → `dirty` false и повторная `open` читает равный проект; ошибка записи (сломанное хранилище) → `error` непустой на английском, `dirty` остаётся true, проект не потерян; `paintStroke` с координатой вне карты → `error`, проект не изменился; `open` по повреждённому файлу → `error` с именем файла, текущий проект не заменён.
 - [ ] **Step 2: Run** `pnpm -F @nestst/editor test` — FAIL. **Step 3: Implement** хранилище состояния, затем интерфейс. **Step 4: Run** тесты — PASS; `tsc` чисто.
 - [ ] **Step 5: Commit** — `feat(editor): editor store, start screen and tile painting UI`.
 
