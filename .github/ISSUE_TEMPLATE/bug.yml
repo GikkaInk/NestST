@@ -1,0 +1,16 @@
+name: Ошибка
+description: Что-то работает не так, как ожидалось
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось?
+      description: Что вы делали, что ожидали и что получилось
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Система
+      description: Дистрибутив Linux, видеокарта, версия NestST

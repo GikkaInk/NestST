@@ -1,0 +1,10 @@
+name: Идея
+description: Предложение или пожелание
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Какую историю или игру вы хотите сделать и чего не хватает?
+    validations:
+      required: true
