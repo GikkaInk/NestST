@@ -75,18 +75,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function checkNewerVersion(raw: unknown, file: string | undefined): void {
-  if (!isRecord(raw)) return;
-  const v = raw.schemaVersion;
-  if (typeof v === "number" && Number.isInteger(v) && v > CURRENT_SCHEMA_VERSION) {
-    throw new NestError(
-      "newer-version",
-      `${file ? `file ${file}: ` : ""}was created by a newer version of NestST (format ${v}; this version understands format ${CURRENT_SCHEMA_VERSION}). Please update NestST.`,
-      file,
-    );
-  }
-}
-
 function withFile(file: string | undefined, where: string): string {
   return file ? `file ${file}: ${where}` : where;
 }
@@ -100,7 +88,6 @@ function mapLabel(raw: unknown): string {
 }
 
 export function parseMap(raw: unknown, file?: string): GameMap {
-  checkNewerVersion(raw, file);
   const where = withFile(file, mapLabel(raw));
   const res = gameMapSchema.safeParse(raw, { error: messageForIssue });
   if (!res.success) {
@@ -127,7 +114,6 @@ export function parseMap(raw: unknown, file?: string): GameMap {
 }
 
 export function parseManifest(raw: unknown, file?: string): ProjectManifest {
-  checkNewerVersion(raw, file);
   const label =
     isRecord(raw) && typeof raw.name === "string" && raw.name !== ""
       ? `in project "${raw.name}"`

@@ -132,11 +132,11 @@ describe("parseMap", () => {
     expect(mapError(validMap({ layers: "x" })).message).toContain("must be a list");
   });
 
-  it("schemaVersion: wrong and newer versions", () => {
+  it("schemaVersion: wrong versions", () => {
     expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("format version must be 1");
     const err = mapError(validMap({ schemaVersion: 2 }), "maps/town.json");
-    expect(err.code).toBe("newer-version");
-    expect(err.message).toContain("update NestST");
+    expect(err.code).toBe("invalid-map");
+    expect(err.message).toContain("format version must be 1");
     expect(err.file).toBe("maps/town.json");
   });
 
@@ -176,7 +176,7 @@ describe("parseManifest", () => {
     expect(manifestError(validManifest({ startMapId: "A" })).message).toContain("startMapId");
   });
 
-  it("resolution, non-object, missing fields, newer version", () => {
+  it("resolution, non-object, missing fields, wrong version", () => {
     expect(manifestError(validManifest({ resolution: { width: 0, height: 360 } })).message).toContain(
       "resolution.width: must be a whole number from 1 to 16384",
     );
@@ -184,7 +184,7 @@ describe("parseManifest", () => {
     const raw = validManifest();
     delete raw.maps;
     expect(manifestError(raw).message).toContain("field maps: this field is missing");
-    expect(manifestError(validManifest({ schemaVersion: 9 })).code).toBe("newer-version");
+    expect(manifestError(validManifest({ schemaVersion: 9 })).code).toBe("invalid-manifest");
   });
 
   it("project name with Cyrillic and spaces is fine, empty is not", () => {
