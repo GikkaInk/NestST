@@ -1,15 +1,15 @@
-# Участие в NestST
+# Contributing to NestST
 
-Спасибо за интерес! Проект на ранней стадии, поэтому правила простые.
+Thanks for your interest! The project is at an early stage, so the rules are simple.
 
-## Идеи и ошибки
-Откройте задачу (issue) по шаблону: для ошибки опишите, что делали, что ожидали и что получилось; для идеи опишите, какую историю или игру вы хотели бы сделать и чего не хватает.
+## Ideas and bugs
+Open an issue using a template. For a bug: what you did, what you expected, what happened. For an idea: which story or game you'd like to make and what is missing.
 
-## Код
-1. Сначала обсудите крупное изменение в задаче.
-2. Работайте в отдельной ветке, делайте маленькие понятные коммиты.
-3. Добавляйте тесты (`pnpm -r test`), пользовательские сообщения пишем простым русским, идентификаторы в коде английские.
-4. Не коммитьте ключи, токены и личные данные. Ключ ИИ-провайдера хранится вне проекта.
+## Code
+1. Discuss larger changes in an issue first.
+2. Work in a separate branch and make small, clear commits.
+3. Add tests (`pnpm -r test`). Identifiers and user-facing messages are in English.
+4. Never commit keys, tokens or personal data. The AI provider key is stored outside the project.
 
-## Лицензия
-Отправляя изменения, вы соглашаетесь, что они распространяются под лицензией MIT.
+## License
+By submitting changes you agree that they are distributed under the MIT license.

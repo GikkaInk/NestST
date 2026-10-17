@@ -1,62 +1,62 @@
-# NestST
+# NestST 巣
 
-**Лёгкий открытый конструктор 2D-игр для Linux, чтобы каждый мог рассказать свою историю в виде игры. Без программирования.**
+**A lightweight, open-source 2D game maker for Linux, so anyone can tell their story as a game. No programming required.**
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-orange.svg)
 
-> ⚠️ Проект на ранней стадии. Готового редактора ещё нет: сейчас это исследование, архитектура и работающий технический прототип. Мы честно отмечаем, что проверено, а что нет.
+> ⚠️ Early stage. There is no finished editor yet: right now this repo holds the research, the architecture and a working technical prototype. We try to be honest about what is verified and what is not.
 
-## Идея
+## The idea
 
-NestST для тех, у кого есть история, но нет желания писать код: энтузиастов, рассказчиков, авторов сюжетов. Вы рисуете карты, расставляете персонажей, пишете диалоги с ветвлением и настраиваете события в понятных визуальных редакторах. Всё остальное делает движок.
+NestST is for people who have a story but don't want to write code: storytellers, writers, hobbyists, fans of manga and anime. You draw maps, place characters, write branching dialogue and set up events in friendly visual editors. The engine handles the rest.
 
-Что мы строим:
+What we are building:
 
-- **Визуальный редактор карт:** плитки, слои, коллизии, NPC, точки появления.
-- **Диалоги, квесты, события без кода:** «событие → условие → действие», простыми блоками.
-- **ИИ-студия для картинок:** портреты, иконки, спрайты с проверкой и импортом в проект. Только по вашему согласию и со своим ключом. Игры и редактор работают и без ИИ.
-- **Лёгкость:** нативное приложение для Linux (Tauri), игры запускаются и в браузере.
-- **Открытость:** лицензия MIT, формат проекта версионирован и защищён миграциями.
+- **Visual map editor:** tiles, layers, collisions, NPCs, spawn points.
+- **Dialogue, quests and events without code:** simple "event → condition → action" blocks.
+- **AI image studio:** portraits, icons and sprites, reviewed by you before they enter the project. Opt-in, bring your own key. The editor and your games work fine without AI.
+- **Lightweight:** a native Linux app (Tauri); games can run in the browser too.
+- **Open:** MIT license, a versioned project format with safe migrations.
 
-Первый шаблон — JRPG с видом сверху. Дальше планируются другие режимы (например, вид сбоку).
+The first template is a top-down JRPG. Other game modes (for example a side view) are planned.
 
-## Статус
+## Status
 
-| Веха | Что | Состояние |
+| Milestone | What | State |
 |---|---|---|
-| M0 | Прототип рисков: Tauri + PixiJS + узловой редактор, замеры | ✅ готово, [отчёт](docs/m0-report.md) |
-| M1 | Ядро проекта (`core`), формат с миграциями, отрисовка карты, редактор карты с undo/redo | 🚧 в работе (готовы схемы формата) |
-| M2 | События и диалоги, играбельная сцена «игрок → NPC → диалог» | ⏳ |
-| M3 | ИИ-студия: генерация, просмотр, импорт | ⏳ |
-| M4 | Предметы, инвентарь, шаблон JRPG, экспорт | ⏳ |
+| M0 | Risk prototype: Tauri + PixiJS + node editor, measurements | ✅ done ([report](docs/m0-report.md)) |
+| M1 | Project core (`core`), versioned format, map rendering, map editor with undo/redo | 🚧 in progress (format schemas done) |
+| M2 | Events and dialogue, a playable "player → NPC → dialogue" scene | ⏳ |
+| M3 | AI studio: generate, review, import | ⏳ |
+| M4 | Items, inventory, JRPG template, export | ⏳ |
 
-Подробности: [спецификация](docs/superpowers/specs/2026-10-18-nestst-design.md), [исследование](docs/research.md), [план M1](docs/superpowers/plans/2026-10-18-m1-core-and-map-editor.md).
+More: [design spec](docs/superpowers/specs/2026-10-18-nestst-design.md), [research](docs/research.md), [M1 plan](docs/superpowers/plans/2026-10-18-m1-core-and-map-editor.md). *(The in-depth docs are currently written in Russian; they will be translated as the project matures.)*
 
-## Технологии
+## Tech
 
-TypeScript, [PixiJS](https://pixijs.com) для отрисовки, [Tauri 2](https://tauri.app) для оболочки Linux, React, zod, vitest, pnpm. Выбор Tauri сделан по замерам прототипа ([отчёт M0](docs/m0-report.md)); Electron тоже измеряли: он плавнее по минимальному FPS, но заметно тяжелее по памяти и диску.
+TypeScript, [PixiJS](https://pixijs.com) for rendering, [Tauri 2](https://tauri.app) for the Linux shell, React, zod, vitest, pnpm. Tauri was chosen from prototype measurements ([M0 report](docs/m0-report.md)); we measured Electron too: smoother minimum FPS, but much heavier on memory and disk.
 
-## Как запустить прототип M0
+## Run the M0 prototype
 
-Нужно: Rust, Node.js 24+, pnpm, `webkit2gtk-4.1`, `gtk3`.
+Requirements: Rust, Node.js 24+, pnpm, `webkit2gtk-4.1`, `gtk3`.
 
 ```bash
 pnpm install
 cd prototypes/m0
-pnpm tauri dev                 # режим разработки
-pnpm tauri build --no-bundle   # release-бинарник: src-tauri/target/release/m0
+pnpm tauri dev                 # development mode
+pnpm tauri build --no-bundle   # release binary: src-tauri/target/release/m0
 ```
 
-В окне: **M** — переключить размер карты (200↔1000), **G** — переключить карту и граф диалога.
+In the window: **M** toggles the map size (200↔1000), **G** switches between the map and the dialogue graph.
 
-Тесты всех пакетов: `pnpm -r test`.
+Run all tests: `pnpm -r test`.
 
-## Участие
+## Contributing
 
-Проект только набирает форму, но идеи и замечания приветствуются: смотрите [CONTRIBUTING.md](CONTRIBUTING.md) и [шаблоны задач](.github/ISSUE_TEMPLATE).
+The project is just taking shape, but ideas and feedback are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [issue templates](.github/ISSUE_TEMPLATE).
 
-## Лицензия
+## License
 
-[MIT](LICENSE). Ваши игры принадлежат только вам.
+[MIT](LICENSE). Your games belong to you.
