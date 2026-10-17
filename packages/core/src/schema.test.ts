@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NestError, parseManifest, parseMap } from "./index.js";
 
-const ENGLISH = /Invalid|expected|received|Too |Required|Expected|must be|string|number|undefined/;
+const ENGLISH = /Invalid input|expected|received|Too small|Too big|Required|undefined|\bNaN\b/i;
 
 function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -44,7 +44,7 @@ function mapError(raw: unknown, file?: string): NestError {
     expect(err.message).not.toMatch(ENGLISH);
     return err;
   }
-  throw new Error("ожидался отказ, но карта принята");
+  throw new Error("expected a rejection, but the map was accepted");
 }
 
 function manifestError(raw: unknown, file?: string): NestError {
@@ -56,45 +56,45 @@ function manifestError(raw: unknown, file?: string): NestError {
     expect(err.message).not.toMatch(ENGLISH);
     return err;
   }
-  throw new Error("ожидался отказ, но манифест принят");
+  throw new Error("expected a rejection, but the manifest was accepted");
 }
 
 describe("parseMap", () => {
-  it("принимает валидную карту 4×3 с двумя слоями", () => {
+  it("accepts a valid 4×3 map with two layers", () => {
     const map = parseMap(validMap());
     expect(map.width).toBe(4);
     expect(map.layers).toHaveLength(2);
   });
 
-  it("размер слоя не равен width*height", () => {
+  it("rejects a layer whose size is not width*height", () => {
     const err = mapError(validMap({ layers: [{ id: "g", name: "Земля", visible: true, tiles: [1, 2] }] }));
-    expect(err.message).toContain("размер слоя");
+    expect(err.message).toContain("layer size");
     expect(err.message).toContain("Земля");
   });
 
-  it.each([0, 2049, 1.5, -3])("width: %s отклоняется с путём и диапазоном", (w) => {
+  it.each([0, 2049, 1.5, -3])("width: %s is rejected with path and range", (w) => {
     const err = mapError(validMap({ width: w }));
-    expect(err.message).toBe("в карте «Город», поле width: должно быть целое число от 1 до 2048");
+    expect(err.message).toBe('in map "Город", field width: must be a whole number from 1 to 2048');
   });
 
-  it.each([256, -1, 2.5])("id плитки %s отклоняется", (t) => {
+  it.each([256, -1, 2.5])("tile id %s is rejected", (t) => {
     const layers = [{ id: "g", name: "З", visible: true, tiles: [0, 0, t, ...new Array(9).fill(0)] }];
     const err = mapError(validMap({ layers }));
     expect(err.message).toContain("layers[0].tiles[2]");
-    expect(err.message).toContain("от 0 до 255");
+    expect(err.message).toContain("from 0 to 255");
   });
 
-  it("viewMode sideview отклоняется", () => {
+  it("viewMode sideview is rejected", () => {
     const err = mapError(validMap({ viewMode: "sideview" }));
     expect(err.message).toContain("viewMode");
   });
 
-  it.each(["../x", "A", "", "a/b", "x".repeat(65)])("id %j отклоняется", (id) => {
+  it.each(["../x", "A", "", "a/b", "x".repeat(65)])("id %j is rejected", (id) => {
     const err = mapError(validMap({ id }));
-    expect(err.message).toContain("поле id");
+    expect(err.message).toContain("field id");
   });
 
-  it("сохраняет неизвестные ключи на карте и в слое", () => {
+  it("keeps unknown keys on the map and layer", () => {
     const raw = validMap({ extra: 1 });
     (raw.layers as Record<string, unknown>[])[0].extra2 = { a: 1 };
     const map = parseMap(raw);
@@ -102,45 +102,45 @@ describe("parseMap", () => {
     expect(map.layers[0].extra2).toEqual({ a: 1 });
   });
 
-  it.each([null, "x", [], 5, undefined])("не-объект %j отклоняется по-русски", (raw) => {
+  it.each([null, "x", [], 5, undefined])("non-object %j is rejected in English", (raw) => {
     const err = mapError(raw);
-    expect(err.message).toContain("должен быть объект");
+    expect(err.message).toContain("must be an object");
   });
 
-  it("пустой список слоёв и больше 16 слоёв", () => {
-    expect(mapError(validMap({ layers: [] })).message).toContain("поле layers");
+  it("empty layers and more than 16 layers", () => {
+    expect(mapError(validMap({ layers: [] })).message).toContain("field layers");
     const many = Array.from({ length: 17 }, (_, i) => ({
       id: `l${i}`, name: "n", visible: true, tiles: new Array(12).fill(0),
     }));
-    expect(mapError(validMap({ layers: many })).message).toContain("не может быть больше 16 элементов");
+    expect(mapError(validMap({ layers: many })).message).toContain("must not be greater than 16 items");
   });
 
-  it("дублирующиеся id слоёв", () => {
+  it("duplicate layer ids", () => {
     const l = { id: "g", name: "З", visible: true, tiles: new Array(12).fill(0) };
-    expect(mapError(validMap({ layers: [l, { ...l }] })).message).toContain("повторяется");
+    expect(mapError(validMap({ layers: [l, { ...l }] })).message).toContain("used more than once");
   });
 
-  it("отсутствующее поле, неверный тип, пустая и слишком длинная строка", () => {
+  it("missing field, wrong type, empty and too long text", () => {
     const raw = validMap();
     delete raw.height;
-    expect(mapError(raw).message).toContain("поле height: поле обязательно, но отсутствует");
-    expect(mapError(validMap({ name: 5 })).message).toContain("поле name: должна быть строка");
-    expect(mapError(validMap({ name: "" })).message).toContain("не должно быть пустым");
-    expect(mapError(validMap({ name: "я".repeat(201) })).message).toContain("не может быть больше 200 символов");
+    expect(mapError(raw).message).toContain("field height: this field is missing");
+    expect(mapError(validMap({ name: 5 })).message).toContain("field name: must be text");
+    expect(mapError(validMap({ name: "" })).message).toContain("must not be empty");
+    expect(mapError(validMap({ name: "я".repeat(201) })).message).toContain("must not be greater than 200 characters");
     const badLayer = [{ id: "g", name: "З", visible: "да", tiles: new Array(12).fill(0) }];
-    expect(mapError(validMap({ layers: badLayer })).message).toContain("layers[0].visible: должно быть «да» или «нет»");
-    expect(mapError(validMap({ layers: "x" })).message).toContain("должен быть список");
+    expect(mapError(validMap({ layers: badLayer })).message).toContain("layers[0].visible: must be true or false");
+    expect(mapError(validMap({ layers: "x" })).message).toContain("must be a list");
   });
 
-  it("schemaVersion: чужая версия и более новая", () => {
-    expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("версия формата должна быть 1");
+  it("schemaVersion: wrong and newer versions", () => {
+    expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("format version must be 1");
     const err = mapError(validMap({ schemaVersion: 2 }), "maps/town.json");
     expect(err.code).toBe("newer-version");
-    expect(err.message).toContain("Обновите NestST");
+    expect(err.message).toContain("update NestST");
     expect(err.file).toBe("maps/town.json");
   });
 
-  it("имя файла попадает в сообщение и в NestError.file", () => {
+  it("file name appears in the message and NestError.file", () => {
     const err = mapError(validMap({ width: 0 }), "maps/town.json");
     expect(err.file).toBe("maps/town.json");
     expect(err.message).toContain("maps/town.json");
@@ -148,47 +148,47 @@ describe("parseMap", () => {
 });
 
 describe("parseManifest", () => {
-  it("принимает валидный манифест и сохраняет неизвестные ключи", () => {
+  it("accepts a valid manifest and keeps unknown keys", () => {
     const m = parseManifest(validManifest({ extra: true }));
     expect(m.maps).toHaveLength(2);
     expect(m.extra).toBe(true);
   });
 
-  it("maps[].file должен быть maps/<id>.json", () => {
+  it("maps[].file must be maps/<id>.json", () => {
     const err = manifestError(validManifest({ maps: [{ id: "town", file: "../town.json" }] }));
     expect(err.message).toContain("maps[0].file");
     expect(err.message).toContain("maps/town.json");
   });
 
-  it("startMapId обязан быть среди maps", () => {
+  it("startMapId must be among maps", () => {
     const err = manifestError(validManifest({ startMapId: "nowhere" }));
     expect(err.message).toContain("startMapId");
-    expect(err.message).toContain("нет среди карт");
+    expect(err.message).toContain("is not among the project maps");
   });
 
-  it("дублирующиеся id карт", () => {
+  it("duplicate map ids", () => {
     const maps = [{ id: "town", file: "maps/town.json" }, { id: "town", file: "maps/town.json" }];
-    expect(manifestError(validManifest({ maps })).message).toContain("больше одного раза");
+    expect(manifestError(validManifest({ maps })).message).toContain("more than once");
   });
 
-  it("небезопасный id карты и startMapId", () => {
+  it("unsafe map id and startMapId", () => {
     expect(manifestError(validManifest({ maps: [{ id: "../x", file: "maps/../x.json" }] })).message).toContain("maps[0].id");
     expect(manifestError(validManifest({ startMapId: "A" })).message).toContain("startMapId");
   });
 
-  it("разрешение, не-объект, отсутствующие поля, новая версия", () => {
+  it("resolution, non-object, missing fields, newer version", () => {
     expect(manifestError(validManifest({ resolution: { width: 0, height: 360 } })).message).toContain(
-      "resolution.width: должно быть целое число от 1 до 16384",
+      "resolution.width: must be a whole number from 1 to 16384",
     );
-    expect(manifestError(null).message).toContain("должен быть объект");
+    expect(manifestError(null).message).toContain("must be an object");
     const raw = validManifest();
     delete raw.maps;
-    expect(manifestError(raw).message).toContain("поле maps: поле обязательно, но отсутствует");
+    expect(manifestError(raw).message).toContain("field maps: this field is missing");
     expect(manifestError(validManifest({ schemaVersion: 9 })).code).toBe("newer-version");
   });
 
-  it("имя проекта с кириллицей и пробелами допустимо, пустое — нет", () => {
+  it("project name with Cyrillic and spaces is fine, empty is not", () => {
     expect(parseManifest(validManifest({ name: "Моя  игра №1" })).name).toBe("Моя  игра №1");
-    expect(manifestError(validManifest({ name: "" })).message).toContain("поле name");
+    expect(manifestError(validManifest({ name: "" })).message).toContain("field name");
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NestError, describeFirstIssue, russianErrorMap } from "./errors.js";
+import { NestError, describeFirstIssue, messageForIssue } from "./errors.js";
 
 export const CURRENT_SCHEMA_VERSION = 1;
 export const MAX_TILE_ID = 255;
@@ -8,13 +8,13 @@ export const MAX_LAYERS = 16;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ID_MESSAGE =
-  "идентификатор должен состоять из латинских строчных букв, цифр, «_» и «-», начинаться с буквы или цифры и быть не длиннее 64 символов";
+  "id must use lowercase Latin letters, digits, \"_\" and \"-\", start with a letter or digit and be at most 64 characters long";
 
-/** Целое число в диапазоне; одно и то же понятное сообщение для любой причины отказа. */
+/** Whole number in a range; one clear message for every reason of rejection. */
 function intRange(min: number, max: number) {
-  const message = `должно быть целое число от ${min} до ${max}`;
+  const message = `must be a whole number from ${min} to ${max}`;
   const error = (iss: { input?: unknown }) =>
-    iss.input === undefined ? "поле обязательно, но отсутствует" : message;
+    iss.input === undefined ? "this field is missing" : message;
   return z.number({ error }).int({ error }).min(min, { error }).max(max, { error });
 }
 
@@ -23,8 +23,8 @@ const idSchema = z.string().regex(ID_PATTERN, { error: ID_MESSAGE });
 const schemaVersionSchema = z.literal(CURRENT_SCHEMA_VERSION, {
   error: (iss) =>
     iss.input === undefined
-      ? "поле обязательно, но отсутствует"
-      : `версия формата должна быть ${CURRENT_SCHEMA_VERSION}`,
+      ? "this field is missing"
+      : `format version must be ${CURRENT_SCHEMA_VERSION}`,
 });
 
 export const tileLayerSchema = z.looseObject({
@@ -41,8 +41,8 @@ export const gameMapSchema = z.looseObject({
   viewMode: z.literal("topdown", {
     error: (iss) =>
       iss.input === undefined
-        ? "поле обязательно, но отсутствует"
-        : "режим вида должен быть «topdown» (вид сверху)",
+        ? "this field is missing"
+        : "view mode must be \"topdown\"",
   }),
   width: intRange(1, MAX_MAP_SIZE),
   height: intRange(1, MAX_MAP_SIZE),
@@ -81,28 +81,28 @@ function checkNewerVersion(raw: unknown, file: string | undefined): void {
   if (typeof v === "number" && Number.isInteger(v) && v > CURRENT_SCHEMA_VERSION) {
     throw new NestError(
       "newer-version",
-      `${file ? `файл ${file}: ` : ""}создан более новой версией NestST (формат ${v}, эта версия понимает формат ${CURRENT_SCHEMA_VERSION}). Обновите NestST.`,
+      `${file ? `file ${file}: ` : ""}was created by a newer version of NestST (format ${v}; this version understands format ${CURRENT_SCHEMA_VERSION}). Please update NestST.`,
       file,
     );
   }
 }
 
 function withFile(file: string | undefined, where: string): string {
-  return file ? `файл ${file}: ${where}` : where;
+  return file ? `file ${file}: ${where}` : where;
 }
 
 function mapLabel(raw: unknown): string {
   if (isRecord(raw)) {
-    if (typeof raw.name === "string" && raw.name !== "") return `в карте «${raw.name}»`;
-    if (typeof raw.id === "string" && raw.id !== "") return `в карте «${raw.id}»`;
+    if (typeof raw.name === "string" && raw.name !== "") return `in map "${raw.name}"`;
+    if (typeof raw.id === "string" && raw.id !== "") return `in map "${raw.id}"`;
   }
-  return "в карте";
+  return "in map";
 }
 
 export function parseMap(raw: unknown, file?: string): GameMap {
   checkNewerVersion(raw, file);
   const where = withFile(file, mapLabel(raw));
-  const res = gameMapSchema.safeParse(raw, { error: russianErrorMap });
+  const res = gameMapSchema.safeParse(raw, { error: messageForIssue });
   if (!res.success) {
     throw new NestError("invalid-map", describeFirstIssue(res.error, where), file);
   }
@@ -112,13 +112,13 @@ export function parseMap(raw: unknown, file?: string): GameMap {
   const seen = new Set<string>();
   for (const layer of map.layers) {
     if (seen.has(layer.id)) {
-      throw new NestError("invalid-map", `${where}: идентификатор слоя «${layer.id}» повторяется`, file);
+      throw new NestError("invalid-map", `${where}: layer id "${layer.id}" is used more than once`, file);
     }
     seen.add(layer.id);
     if (layer.tiles.length !== expected) {
       throw new NestError(
         "invalid-map",
-        `${where}: размер слоя «${layer.name}» (${layer.tiles.length} плиток) не равен ширина × высота (${map.width} × ${map.height} = ${expected})`,
+        `${where}: layer size of "${layer.name}" (${layer.tiles.length} tiles) does not match width × height (${map.width} × ${map.height} = ${expected})`,
         file,
       );
     }
@@ -130,10 +130,10 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
   checkNewerVersion(raw, file);
   const label =
     isRecord(raw) && typeof raw.name === "string" && raw.name !== ""
-      ? `в проекте «${raw.name}»`
-      : "в манифесте проекта";
+      ? `in project "${raw.name}"`
+      : "in project manifest";
   const where = withFile(file, label);
-  const res = projectManifestSchema.safeParse(raw, { error: russianErrorMap });
+  const res = projectManifestSchema.safeParse(raw, { error: messageForIssue });
   if (!res.success) {
     throw new NestError("invalid-manifest", describeFirstIssue(res.error, where), file);
   }
@@ -142,14 +142,14 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
   const ids = new Set<string>();
   manifest.maps.forEach((entry, i) => {
     if (ids.has(entry.id)) {
-      throw new NestError("invalid-manifest", `${where}: карта «${entry.id}» указана в списке maps больше одного раза`, file);
+      throw new NestError("invalid-manifest", `${where}: map "${entry.id}" is listed more than once in maps`, file);
     }
     ids.add(entry.id);
     const expectedFile = `maps/${entry.id}.json`;
     if (entry.file !== expectedFile) {
       throw new NestError(
         "invalid-manifest",
-        `${where}, поле maps[${i}].file: для карты «${entry.id}» файл должен быть «${expectedFile}», а указано «${entry.file}»`,
+        `${where}, field maps[${i}].file: for map "${entry.id}" the file must be "${expectedFile}", but it is "${entry.file}"`,
         file,
       );
     }
@@ -157,7 +157,7 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
   if (!ids.has(manifest.startMapId)) {
     throw new NestError(
       "invalid-manifest",
-      `${where}, поле startMapId: стартовой карты «${manifest.startMapId}» нет среди карт проекта`,
+      `${where}, field startMapId: start map "${manifest.startMapId}" is not among the project maps`,
       file,
     );
   }
