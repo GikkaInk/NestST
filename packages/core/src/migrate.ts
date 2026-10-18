@@ -12,7 +12,16 @@ export interface MigrationStep {
 /** Real data migrations, one chain per file kind. */
 export const MIGRATIONS: MigrationStep[] = [
   { kind: "manifest", from: 1, to: 2, run: (raw) => ({ ...raw, schemaVersion: 2 }) },
-  { kind: "map", from: 1, to: 2, run: (raw) => ({ ...raw, objects: [], schemaVersion: 2 }) },
+  {
+    kind: "map",
+    from: 1,
+    to: 2,
+    run: (raw) => ({
+      ...raw,
+      objects: Array.isArray(raw.objects) ? raw.objects : [],
+      schemaVersion: 2,
+    }),
+  },
 ];
 
 function isRecord(v: unknown): v is Record<string, unknown> {

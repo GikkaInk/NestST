@@ -30,6 +30,17 @@ describe("migration 1 to 2", () => {
     expect(out.layers).toEqual(v1Map().layers);
   });
 
+  it("keeps an existing objects array", () => {
+    const objects = [{ id: "a", kind: "npc", x: 0, y: 0, props: {} }];
+    const out = migrateRaw("map", { ...v1Map(), objects }) as Record<string, unknown>;
+    expect(out.objects).toEqual(objects);
+  });
+
+  it("replaces non-array objects with an empty array", () => {
+    const out = migrateRaw("map", { ...v1Map(), objects: "oops" }) as Record<string, unknown>;
+    expect(out.objects).toEqual([]);
+  });
+
   it("only bumps the manifest version", () => {
     const out = migrateRaw("manifest", v1Manifest());
     expect(out).toEqual({ ...v1Manifest(), schemaVersion: 2 });
