@@ -10,3 +10,6 @@ export {
 export type { TileLayer, GameMap, ProjectManifest } from "./schema.js";
 export { migrateRaw, MIGRATIONS } from "./migrate.js";
 export type { MigrationStep } from "./migrate.js";
+export type { ProjectStorage } from "./storage.js";
+export { MANIFEST_FILE, createEmptyProject, saveProject, loadProject } from "./project.js";
+export type { Project } from "./project.js";
