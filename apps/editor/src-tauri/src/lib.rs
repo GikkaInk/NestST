@@ -4,27 +4,33 @@ use files::ProjectRoot;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-/// Shows a folder picker; the chosen folder becomes the project root.
-/// Cancelling keeps the current root. Runs off the main thread (async
-/// command), so the blocking picker does not freeze the window.
-fn pick_root(app: &AppHandle, title: &str) -> Option<String> {
+/// Shows a folder picker; the chosen folder is added to the allowed project
+/// folders and returned (`None` when cancelled). Runs off the main thread
+/// (async command), so the blocking picker does not freeze the window.
+fn pick_root(app: &AppHandle, title: &str) -> Result<Option<String>, String> {
   let picked = app
     .dialog()
     .file()
     .set_title(title)
     .set_can_create_directories(true)
-    .blocking_pick_folder()?;
-  let path = picked.into_path().ok()?;
-  files::set_root(&app.state::<ProjectRoot>(), &path).ok()
+    .blocking_pick_folder();
+  let path = match picked {
+    None => None,
+    Some(p) => Some(
+      p.into_path()
+        .map_err(|_| "The chosen folder is not a local folder. Choose a folder on this computer.".to_string())?,
+    ),
+  };
+  files::root_from_pick(&app.state::<ProjectRoot>(), path)
 }
 
 #[tauri::command]
-async fn open_project_dialog(app: AppHandle) -> Option<String> {
+async fn open_project_dialog(app: AppHandle) -> Result<Option<String>, String> {
   pick_root(&app, "Open NestST project folder")
 }
 
 #[tauri::command]
-async fn new_project_dialog(app: AppHandle) -> Option<String> {
+async fn new_project_dialog(app: AppHandle) -> Result<Option<String>, String> {
   pick_root(&app, "Choose a folder for the new NestST project")
 }
 
@@ -38,24 +44,33 @@ async fn on_worker<T: Send + 'static>(
 }
 
 #[tauri::command]
-async fn project_read(state: State<'_, ProjectRoot>, path: String) -> Result<String, String> {
-  let root = files::current_root(&state)?;
+async fn project_read(
+  state: State<'_, ProjectRoot>,
+  root: String,
+  path: String,
+) -> Result<String, String> {
+  let root = files::current_root(&state, &root)?;
   on_worker(move || files::read_text(&root, &path)).await
 }
 
 #[tauri::command]
 async fn project_write_atomic(
   state: State<'_, ProjectRoot>,
+  root: String,
   path: String,
   data: String,
 ) -> Result<(), String> {
-  let root = files::current_root(&state)?;
+  let root = files::current_root(&state, &root)?;
   on_worker(move || files::write_atomic(&root, &path, data.as_bytes())).await
 }
 
 #[tauri::command]
-async fn project_exists(state: State<'_, ProjectRoot>, path: String) -> Result<bool, String> {
-  let root = files::current_root(&state)?;
+async fn project_exists(
+  state: State<'_, ProjectRoot>,
+  root: String,
+  path: String,
+) -> Result<bool, String> {
+  let root = files::current_root(&state, &root)?;
   on_worker(move || files::exists(&root, &path)).await
 }
 

@@ -21,30 +21,60 @@ const TEMP_ATTEMPTS: u32 = 16;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// The project folder chosen by the user; `None` until a folder is picked.
+/// Project folders the user picked with a folder dialog in this window, as
+/// canonical paths. The web side names the folder it works on, and only these
+/// folders are accepted, so the webview cannot reach any other place. Several
+/// are kept so that a project stays saveable after the user picked another
+/// folder whose project then failed to open.
 #[derive(Default)]
-pub struct ProjectRoot(pub Mutex<Option<PathBuf>>);
+pub struct ProjectRoot(pub Mutex<Vec<PathBuf>>);
 
-/// The chosen project folder, or an error if none has been picked yet.
-pub fn current_root(state: &ProjectRoot) -> Result<PathBuf, String> {
+/// The picked folder named `root` (exactly as `allow_root` returned it), or an
+/// error if it was not picked in this window.
+pub fn current_root(state: &ProjectRoot, root: &str) -> Result<PathBuf, String> {
   let guard = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+  if guard.is_empty() {
+    return Err("No project folder is open. Open or create a project first.".to_string());
+  }
   guard
-    .clone()
-    .ok_or_else(|| "No project folder is open. Open or create a project first.".to_string())
+    .iter()
+    .find(|p| p.to_str() == Some(root))
+    .cloned()
+    .ok_or_else(|| {
+      "This project folder is not open in this window. Open or create the project again."
+        .to_string()
+    })
 }
 
-/// Stores the picked folder (canonicalised) as the project root and returns
-/// it for display. On error the previous root stays.
-pub fn set_root(state: &ProjectRoot, folder: &Path) -> Result<String, String> {
+/// Adds the picked folder (canonicalised) to the allowed project folders and
+/// returns it; the web side passes this exact text back as `root`. On error
+/// nothing changes.
+pub fn allow_root(state: &ProjectRoot, folder: &Path) -> Result<String, String> {
   let not_found = || format!("Project folder \"{}\" was not found", folder.display());
   let canon = fs::canonicalize(folder).map_err(|_| not_found())?;
   if !canon.is_dir() {
     return Err(not_found());
   }
-  let shown = canon.to_string_lossy().into_owned();
+  let Some(shown) = canon.to_str().map(str::to_owned) else {
+    return Err(format!(
+      "The folder name \"{}\" contains characters NestST cannot handle. Rename the folder and try again.",
+      canon.display()
+    ));
+  };
   let mut guard = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-  *guard = Some(canon);
+  if !guard.contains(&canon) {
+    guard.push(canon);
+  }
   Ok(shown)
+}
+
+/// Result of a folder dialog: `None` when cancelled, otherwise the folder is
+/// allowed and returned. A folder that cannot be used is an error, not a cancel.
+pub fn root_from_pick(state: &ProjectRoot, picked: Option<PathBuf>) -> Result<Option<String>, String> {
+  match picked {
+    None => Ok(None),
+    Some(path) => allow_root(state, &path).map(Some),
+  }
 }
 
 /// Plain English description of an I/O error. The OS text is not used: once
@@ -395,43 +425,78 @@ mod tests {
     assert!(resolve_in_root(dir.path(), "dangling.json").is_err());
   }
 
-  // ---- current_root ----
+  // ---- current_root / allow_root ----
 
   #[test]
   fn current_root_requires_a_chosen_folder() {
     let state = ProjectRoot::default();
-    let err = current_root(&state).unwrap_err();
+    let err = current_root(&state, "/tmp").unwrap_err();
     assert!(err.contains("No project folder"), "{err}");
-    *state.0.lock().unwrap() = Some(PathBuf::from("/tmp/x"));
-    assert_eq!(current_root(&state).unwrap(), PathBuf::from("/tmp/x"));
   }
 
   #[test]
-  fn set_root_stores_canonical_target_of_symlinked_folder() {
+  fn current_root_accepts_only_picked_folders() {
+    let a = project();
+    let b = project();
+    let unpicked = project();
+    let state = ProjectRoot::default();
+    let ra = allow_root(&state, a.path()).unwrap();
+    let rb = allow_root(&state, b.path()).unwrap();
+    assert_eq!(current_root(&state, &ra).unwrap(), fs::canonicalize(a.path()).unwrap());
+    assert_eq!(current_root(&state, &rb).unwrap(), fs::canonicalize(b.path()).unwrap());
+    // A real folder that was never picked is refused, as is a non-canonical spelling.
+    let other = fs::canonicalize(unpicked.path()).unwrap();
+    let err = current_root(&state, other.to_str().unwrap()).unwrap_err();
+    assert!(err.contains("not open in this window"), "{err}");
+    assert!(current_root(&state, &format!("{ra}/")).is_err());
+    assert!(current_root(&state, &format!("{ra}/../{}", a.path().file_name().unwrap().to_str().unwrap())).is_err());
+    assert!(current_root(&state, "").is_err());
+    // Picking the same folder twice keeps one entry.
+    allow_root(&state, a.path()).unwrap();
+    assert_eq!(state.0.lock().unwrap().len(), 2);
+  }
+
+  #[test]
+  fn allow_root_stores_canonical_target_of_symlinked_folder() {
     let real = project();
     let links = project();
     let link = links.path().join("link to project");
     symlink(real.path(), &link).unwrap();
     let state = ProjectRoot::default();
-    let shown = set_root(&state, &link).unwrap();
+    let shown = allow_root(&state, &link).unwrap();
     let canon = fs::canonicalize(real.path()).unwrap();
-    assert_eq!(current_root(&state).unwrap(), canon);
     assert_eq!(shown, canon.to_string_lossy());
+    assert_eq!(current_root(&state, &shown).unwrap(), canon);
     // Retargeting the link later does not move the sandbox.
     let other = project();
     fs::remove_file(&link).unwrap();
     symlink(other.path(), &link).unwrap();
-    assert_eq!(current_root(&state).unwrap(), canon);
+    assert_eq!(current_root(&state, &shown).unwrap(), canon);
   }
 
   #[test]
-  fn set_root_rejects_missing_folder_and_keeps_old_root() {
+  fn allow_root_rejects_missing_folder_and_keeps_old_roots() {
     let dir = project();
     let state = ProjectRoot::default();
-    set_root(&state, dir.path()).unwrap();
-    let err = set_root(&state, &dir.path().join("gone")).unwrap_err();
+    let shown = allow_root(&state, dir.path()).unwrap();
+    let err = allow_root(&state, &dir.path().join("gone")).unwrap_err();
     assert!(err.contains("Project folder"), "{err}");
-    assert_eq!(current_root(&state).unwrap(), fs::canonicalize(dir.path()).unwrap());
+    assert_eq!(current_root(&state, &shown).unwrap(), fs::canonicalize(dir.path()).unwrap());
+    assert_eq!(state.0.lock().unwrap().len(), 1);
+  }
+
+  #[test]
+  fn root_from_pick_tells_cancel_apart_from_failure() {
+    let dir = project();
+    let state = ProjectRoot::default();
+    assert_eq!(root_from_pick(&state, None), Ok(None));
+    let shown = root_from_pick(&state, Some(dir.path().to_path_buf())).unwrap().unwrap();
+    assert_eq!(shown, fs::canonicalize(dir.path()).unwrap().to_string_lossy());
+    let err = root_from_pick(&state, Some(dir.path().join("gone"))).unwrap_err();
+    assert!(err.contains("was not found"), "{err}");
+    // A file is not a project folder.
+    fs::write(dir.path().join("f.txt"), "x").unwrap();
+    assert!(root_from_pick(&state, Some(dir.path().join("f.txt"))).is_err());
   }
 
   // ---- write_atomic ----
