@@ -346,14 +346,17 @@ describe("save and open", () => {
     expect(store.getState().error).toBeNull();
   });
 
-  it("edits made while saving stay dirty", async () => {
+  it("painting while saving is ignored; an undo while saving stays dirty", async () => {
     const storage = new MemoryStorage();
     const { store } = await storeWithNewProject(storage);
     store.paintStroke([ground(0, 0, 1)]);
-    const pending = store.save();
     store.paintStroke([ground(1, 0, 1)]);
+    const pending = store.save();
+    expect(store.paintStroke([ground(2, 0, 1)])).toBe(false);
+    store.undo();
     expect(await pending).toBe(true);
     expect(store.getState().dirty).toBe(true);
+    expect(tilesOf(store)[2]).toBe(0);
   });
 });
 
@@ -449,12 +452,15 @@ describe("dirty tracking after the history overflows (limit 200)", () => {
     expect(store.getState().dirty).toBe(true);
   });
 
-  it("saved state evicted from history: undo all is dirty, redo back to it is clean", async () => {
+  it("saved state evicted from history: undo all and redo all are both dirty", async () => {
     const { store } = await storeWithNewProject();
     for (let k = 0; k < 150; k++) strokeN(store, k);
     await store.save();
     for (let k = 150; k < 400; k++) strokeN(store, k);
     undoAll(store);
+    expect(store.getState().dirty).toBe(true);
+    // The saved step (150) was evicted, so no undo/redo position matches it.
+    while (store.getState().canRedo) store.redo();
     expect(store.getState().dirty).toBe(true);
   });
 
@@ -480,6 +486,121 @@ describe("dirty tracking after the history overflows (limit 200)", () => {
     strokeN(store, 300);
     store.undo();
     expect(store.getState().dirty).toBe(false);
+  });
+});
+
+describe("edits while a folder dialog is open", () => {
+  /** Session whose picker runs `during` while it is "open", then returns `picked`. */
+  function slowSession(picked: OpenedFolder, during: () => void, first?: OpenedFolder): ProjectSession {
+    let calls = 0;
+    const pick = async () => {
+      calls += 1;
+      if (first && calls === 1) return first;
+      await Promise.resolve();
+      during();
+      return picked;
+    };
+    return { pickNew: pick, pickOpen: pick };
+  }
+
+  async function otherProject(): Promise<MemoryStorage> {
+    const other = new MemoryStorage();
+    await storeWithNewProject(other);
+    return other;
+  }
+
+  it("paintStroke is ignored while busy, without an error", async () => {
+    const other = await otherProject();
+    let seen: { painted: boolean; error: string | null } | null = null;
+    const holder: { store?: ReturnType<typeof createEditorStore> } = {};
+    const store = createEditorStore(
+      slowSession(folder(other, "/b"), () => {
+        seen = {
+          painted: holder.store!.paintStroke([ground(4, 4, 4)]),
+          error: holder.store!.getState().error,
+        };
+      }, folder(new MemoryStorage(), "/a")),
+    );
+    holder.store = store;
+    await store.newProject("A");
+    expect(await store.open()).toBe(true);
+    expect(seen).toEqual({ painted: false, error: null });
+  });
+
+  it("open is not adopted when the project changed during the dialog; edits are kept", async () => {
+    const other = await otherProject();
+    const holder: { store?: ReturnType<typeof createEditorStore> } = {};
+    const store = createEditorStore(
+      slowSession(folder(other, "/b"), () => holder.store!.undo(), folder(new MemoryStorage(), "/a")),
+    );
+    holder.store = store;
+    await store.newProject("A");
+    store.paintStroke([ground(1, 1, 1)]);
+    store.paintStroke([ground(2, 2, 2)]);
+    expect(await store.open()).toBe(false);
+    const s = store.getState();
+    expect(s.rootLabel).toBe("/a");
+    expect(s.projectName).toBe("A");
+    expect(s.dirty).toBe(true);
+    expect(s.canRedo).toBe(true);
+    expect(tilesOf(store)[33]).toBe(1);
+    expect(s.busy).toBe(false);
+    expect(s.error).toMatch(/changed while the folder dialog was open/);
+  });
+
+  it("Save first, then Open: a change during the dialog is not thrown away", async () => {
+    const other = await otherProject();
+    const holder: { store?: ReturnType<typeof createEditorStore> } = {};
+    const store = createEditorStore(
+      slowSession(folder(other, "/b"), () => holder.store!.undo(), folder(new MemoryStorage(), "/a")),
+    );
+    holder.store = store;
+    await store.newProject("A");
+    store.paintStroke([ground(1, 1, 1)]);
+    expect(await store.save()).toBe(true);
+    expect(await store.open()).toBe(false);
+    expect(store.getState().rootLabel).toBe("/a");
+    expect(store.getState().dirty).toBe(true);
+    expect(tilesOf(store)[33]).toBe(0);
+  });
+
+  it("new project is not created when the project changed during the dialog", async () => {
+    const target = new MemoryStorage();
+    const holder: { store?: ReturnType<typeof createEditorStore> } = {};
+    const store = createEditorStore(
+      slowSession(folder(target, "/new"), () => holder.store!.undo(), folder(new MemoryStorage(), "/a")),
+    );
+    holder.store = store;
+    await store.newProject("A");
+    store.paintStroke([ground(1, 1, 1)]);
+    store.paintStroke([ground(2, 2, 2)]);
+    expect(await store.newProject("B")).toBe(false);
+    expect(store.getState().projectName).toBe("A");
+    expect(store.getState().dirty).toBe(true);
+    expect(store.getState().error).toMatch(/changed while the folder dialog was open/);
+    expect(target.writeLog).toEqual([]);
+  });
+
+  it("an unchanged project is replaced normally", async () => {
+    const other = await otherProject();
+    const store = createEditorStore(slowSession(folder(other, "/b"), () => {}, folder(new MemoryStorage(), "/a")));
+    await store.newProject("A");
+    store.paintStroke([ground(1, 1, 1)]);
+    await store.save();
+    expect(await store.open()).toBe(true);
+    expect(store.getState().rootLabel).toBe("/b");
+  });
+});
+
+describe("new project next to stray files", () => {
+  it("refuses a folder that already has maps/main.json and writes nothing", async () => {
+    const storage = new MemoryStorage({ "maps/main.json": "keep me" });
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.newProject("Game")).toBe(false);
+    expect(store.getState().project).toBeNull();
+    expect(store.getState().error).toMatch(/maps\/main\.json/);
+    expect(storage.files.get("maps/main.json")).toBe("keep me");
+    expect(storage.writeLog).toEqual([]);
   });
 });
 

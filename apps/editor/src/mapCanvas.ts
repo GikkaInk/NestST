@@ -230,6 +230,8 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
       return;
     }
     if (e.button !== 0 || stroke !== null || pan !== null) return;
+    // No painting while new/open/save runs (e.g. a folder dialog is open).
+    if (store.getState().busy) return;
     const map = currentMap();
     const layer = map?.layers[0];
     if (!map || !layer) return;

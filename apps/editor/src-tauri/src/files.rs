@@ -302,11 +302,15 @@ fn write_atomic_limited(root: &Path, rel: &str, data: &[u8], limit: u64) -> Resu
 }
 
 /// Whether a file or folder exists at the project-relative path.
+/// True only if `rel` is an existing regular FILE (a folder of that name is
+/// `false`), the same contract as `ProjectStorage.exists` in core.
 pub fn exists(root: &Path, rel: &str) -> Result<bool, String> {
   let path = resolve_in_root(root, rel)?;
-  path
-    .try_exists()
-    .map_err(|e| format!("Cannot check \"{rel}\": {}", describe(&e)))
+  match fs::metadata(&path) {
+    Ok(meta) => Ok(meta.is_file()),
+    Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+    Err(e) => Err(format!("Cannot check \"{rel}\": {}", describe(&e))),
+  }
 }
 
 #[cfg(test)]
@@ -535,6 +539,7 @@ mod tests {
     // Running as root ignores permissions: nothing to test then.
     let probe = maps.join("probe");
     if fs::write(&probe, "").is_ok() {
+      eprintln!("SKIPPED write_into_read_only_folder_keeps_old_file: running as root, permissions are ignored");
       let _ = fs::remove_file(&probe);
       fs::set_permissions(&maps, fs::Permissions::from_mode(0o755)).unwrap();
       return;
@@ -631,5 +636,9 @@ mod tests {
     write_atomic(dir.path(), "nestst.project.json", b"{}").unwrap();
     assert!(exists(dir.path(), "nestst.project.json").unwrap());
     assert!(exists(dir.path(), "../x").is_err());
+    // A folder is not a file.
+    fs::create_dir_all(dir.path().join("maps/main.json")).unwrap();
+    assert!(!exists(dir.path(), "maps/main.json").unwrap());
+    assert!(!exists(dir.path(), "maps").unwrap());
   }
 }

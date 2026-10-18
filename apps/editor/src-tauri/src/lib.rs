@@ -1,16 +1,18 @@
 pub mod files;
 
 use files::ProjectRoot;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 
 /// Shows a folder picker; the chosen folder is added to the allowed project
 /// folders and returned (`None` when cancelled). Runs off the main thread
-/// (async command), so the blocking picker does not freeze the window.
-fn pick_root(app: &AppHandle, title: &str) -> Result<Option<String>, String> {
+/// (async command), so the blocking picker does not freeze the window. The
+/// picker is modal to `window`, so the map cannot be edited while it is open.
+fn pick_root(app: &AppHandle, window: &WebviewWindow, title: &str) -> Result<Option<String>, String> {
   let picked = app
     .dialog()
     .file()
+    .set_parent(window)
     .set_title(title)
     .set_can_create_directories(true)
     .blocking_pick_folder();
@@ -25,13 +27,13 @@ fn pick_root(app: &AppHandle, title: &str) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-async fn open_project_dialog(app: AppHandle) -> Result<Option<String>, String> {
-  pick_root(&app, "Open NestST project folder")
+async fn open_project_dialog(app: AppHandle, window: WebviewWindow) -> Result<Option<String>, String> {
+  pick_root(&app, &window, "Open NestST project folder")
 }
 
 #[tauri::command]
-async fn new_project_dialog(app: AppHandle) -> Result<Option<String>, String> {
-  pick_root(&app, "Choose a folder for the new NestST project")
+async fn new_project_dialog(app: AppHandle, window: WebviewWindow) -> Result<Option<String>, String> {
+  pick_root(&app, &window, "Choose a folder for the new NestST project")
 }
 
 /// Runs blocking file work on a worker thread.

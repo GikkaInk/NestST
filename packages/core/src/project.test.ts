@@ -397,7 +397,11 @@ describe("NodeFsStorage", () => {
 
     // Read-only folder: the temp file cannot be created, old content stays.
     await writeFile(join(base, "maps", "main.json"), "old");
-    if (process.getuid?.() === 0) return; // root ignores permissions
+    if (process.getuid?.() === 0) {
+      // Root ignores permissions, so this part cannot be tested; say so instead of passing silently.
+      console.warn("SKIPPED read-only folder checks: running as root, permissions are ignored");
+      return;
+    }
     await chmod(join(base, "maps"), 0o555);
     try {
       await expect(storage.writeAtomic("maps/main.json", "new")).rejects.toThrow();

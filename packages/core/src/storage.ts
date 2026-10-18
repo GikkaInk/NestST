@@ -13,5 +13,9 @@ export interface ProjectStorage {
    * Creates missing parent folders.
    */
   writeAtomic(path: string, data: string): Promise<void>;
+  /**
+   * True only if `path` is an existing regular FILE; a folder with that name
+   * gives `false`. Rejects if the check itself fails (e.g. permission denied).
+   */
   exists(path: string): Promise<boolean>;
 }

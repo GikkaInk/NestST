@@ -121,6 +121,12 @@ export function createEditorStore(session: ProjectSession): EditorStore {
   // state) until the history overflows, then the id of the last evicted step.
   let floorId = 0;
   const topId = () => doneIds.at(-1) ?? floorId;
+  // Bumped by every change of the open project (paint, undo, redo). A folder
+  // dialog may stay open while the user keeps working; if the project changed
+  // meanwhile, new/open must not replace it without asking again.
+  let version = 0;
+  const CHANGED_DURING_DIALOG =
+    "The project changed while the folder dialog was open, so nothing was opened. Save or undo your changes and try again.";
 
   let state: EditorState = {
     project: null,
@@ -201,6 +207,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       } catch (e) {
         return fail("", e);
       }
+      const versionAtStart = version;
       set({ busy: true });
       const picked = await pick("pickNew");
       if (picked === "failed") return false;
@@ -208,6 +215,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         set({ busy: false });
         return false;
       }
+      if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
       try {
         if (await picked.storage.exists(MANIFEST_FILE)) {
           return fail(
@@ -215,6 +223,16 @@ export function createEditorStore(session: ProjectSession): EditorStore {
             "this folder already has a NestST project. Choose an empty folder, or use Open project instead",
           );
         }
+        // Never overwrite a stray file the new project would write.
+        for (const entry of project.manifest.maps) {
+          if (await picked.storage.exists(entry.file)) {
+            return fail(
+              "",
+              `this folder already has a file ${entry.file}, and NestST will not overwrite it. Choose an empty folder`,
+            );
+          }
+        }
+        if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
         await saveProject(picked.storage, project);
       } catch (e) {
         return fail("Could not save the new project. ", e);
@@ -225,6 +243,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
 
     async open() {
       if (state.busy) return false;
+      const versionAtStart = version;
       set({ busy: true });
       const picked = await pick("pickOpen");
       if (picked === "failed") return false;
@@ -240,6 +259,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         set({ busy: false, error: `Could not open the project. ${ensurePeriod(capitalize(describe(e)))}${keep}` });
         return false;
       }
+      if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
       adopt(project, picked);
       return true;
     },
@@ -266,7 +286,8 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     paintStroke(edits) {
       const project = state.project;
       const mapId = state.currentMapId;
-      if (project === null || mapId === null || edits.length === 0) return false;
+      // While new/open/save runs the project must stay as it is (see `version`).
+      if (state.busy || project === null || mapId === null || edits.length === 0) return false;
       const map = project.maps[mapId];
       if (map === undefined) return false;
       let next: Project;
@@ -279,6 +300,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         return fail("Could not paint there. ", e);
       }
       doneIds.push(nextStepId++);
+      version += 1;
       if (doneIds.length > HISTORY_LIMIT) floorId = doneIds.shift()!;
       undoneIds = [];
       set({ project: next, ...historyPatch() });
@@ -289,6 +311,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       if (state.project === null || !history.canUndo) return;
       const next = history.undo(state.project);
       undoneIds.push(doneIds.pop()!);
+      version += 1;
       set({ project: next, ...historyPatch() });
     },
 
@@ -296,6 +319,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       if (state.project === null || !history.canRedo) return;
       const next = history.redo(state.project);
       doneIds.push(undoneIds.pop()!);
+      version += 1;
       set({ project: next, ...historyPatch() });
     },
 

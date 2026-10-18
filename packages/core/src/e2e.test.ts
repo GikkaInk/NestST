@@ -44,6 +44,19 @@ async function listFiles(dir: string, prefix = ""): Promise<string[]> {
   return out.sort();
 }
 
+/** NodeFsStorage that records every path it is asked to read or check. */
+class RecordingFsStorage extends NodeFsStorage {
+  readonly touched: string[] = [];
+  override async read(path: string): Promise<string> {
+    this.touched.push(path);
+    return super.read(path);
+  }
+  override async exists(path: string): Promise<boolean> {
+    this.touched.push(path);
+    return super.exists(path);
+  }
+}
+
 /** NodeFsStorage whose n-th write call (1-based) fails before touching the disk. */
 class FailingFsStorage extends NodeFsStorage {
   private calls = 0;
@@ -214,12 +227,19 @@ describe("end-to-end project on disk", () => {
       { id: "../x", file: "maps/../x.json" },
       { id: "../x", file: "../x.json" },
       { id: "a/b", file: "maps/a/b.json" },
+      // A valid id with an unsafe file: the `maps/<id>.json` rule must refuse it.
+      { id: "x", file: "../x.json" },
     ]) {
       await writeFile(manifestPath, JSON.stringify({ ...raw, maps: [entry], startMapId: entry.id }));
-      const err = await rejected(loadProject(new NodeFsStorage(dir)));
+      const storage = new RecordingFsStorage(dir);
+      const err = await rejected(loadProject(storage));
       expect(err.code).toBe("invalid_manifest");
       expect(err.file).toBe(MANIFEST_FILE);
       expect(err.message).toContain(MANIFEST_FILE);
+      // Only the manifest was looked at; the file outside was never read or checked.
+      expect(storage.touched.every((p) => p === MANIFEST_FILE)).toBe(true);
+      expect(storage.touched).not.toContain("../x.json");
+      expect(storage.touched).not.toContain("maps/../x.json");
     }
 
     // Saving a project with such an id is refused before anything is written.
