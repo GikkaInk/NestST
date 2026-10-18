@@ -346,17 +346,19 @@ describe("save and open", () => {
     expect(store.getState().error).toBeNull();
   });
 
-  it("painting while saving is ignored; an undo while saving stays dirty", async () => {
+  it("painting while saving is allowed; an undo while saving stays dirty", async () => {
     const storage = new MemoryStorage();
     const { store } = await storeWithNewProject(storage);
     store.paintStroke([ground(0, 0, 1)]);
     store.paintStroke([ground(1, 0, 1)]);
     const pending = store.save();
-    expect(store.paintStroke([ground(2, 0, 1)])).toBe(false);
+    expect(store.paintStroke([ground(2, 0, 1)])).toBe(true);
+    store.undo();
     store.undo();
     expect(await pending).toBe(true);
     expect(store.getState().dirty).toBe(true);
     expect(tilesOf(store)[2]).toBe(0);
+    expect(tilesOf(store)[1]).toBe(0);
   });
 });
 
@@ -509,7 +511,7 @@ describe("edits while a folder dialog is open", () => {
     return other;
   }
 
-  it("paintStroke is ignored while busy, without an error", async () => {
+  it("paintStroke is ignored while the folder dialog is open, without an error", async () => {
     const other = await otherProject();
     let seen: { painted: boolean; error: string | null } | null = null;
     const holder: { store?: ReturnType<typeof createEditorStore> } = {};
@@ -544,7 +546,7 @@ describe("edits while a folder dialog is open", () => {
     expect(s.dirty).toBe(true);
     expect(s.canRedo).toBe(true);
     expect(tilesOf(store)[33]).toBe(1);
-    expect(s.busy).toBe(false);
+    expect(s.mode).toBe("idle");
     expect(s.error).toMatch(/changed while the folder dialog was open/);
   });
 
@@ -604,3 +606,135 @@ describe("new project next to stray files", () => {
   });
 });
 
+
+/** Storage whose writes wait until `release()` is called, once `hold()` was called. */
+class GatedStorage extends MemoryStorage {
+  private gate: Promise<void> | null = null;
+  private open: (() => void) | null = null;
+  hold(): void {
+    this.gate = new Promise<void>((resolve) => {
+      this.open = resolve;
+    });
+  }
+  release(): void {
+    this.open?.();
+    this.gate = null;
+  }
+  override async writeAtomic(path: string, data: string): Promise<void> {
+    if (this.gate) await this.gate;
+    return super.writeAtomic(path, data);
+  }
+}
+
+const V1_MANIFEST = `{"schemaVersion":1,"name":"Game","resolution":{"width":1280,"height":720},"tileSize":16,"maps":[{"id":"main","file":"maps/main.json"}],"startMapId":"main"}`;
+const V1_MAP = `${JSON.stringify({
+  schemaVersion: 1,
+  id: "main",
+  name: "Main",
+  viewMode: "topdown",
+  width: 2,
+  height: 2,
+  tileSize: 16,
+  layers: [{ id: "ground", name: "Ground", visible: true, tiles: [1, 2, 3, 4] }],
+})}\n`;
+
+function v1Storage(): MemoryStorage {
+  return new MemoryStorage({ [MANIFEST_FILE]: V1_MANIFEST, "maps/main.json": V1_MAP });
+}
+
+const backupPaths = (s: MemoryStorage) => [...s.files.keys()].filter((p) => p.startsWith(".nestst-backup/"));
+
+describe("modes", () => {
+  it("strokes are allowed while saving and stay unsaved afterwards", async () => {
+    const storage = new GatedStorage();
+    const { store } = await storeWithNewProject(storage);
+    store.paintStroke([ground(1, 1, 1)]);
+    storage.hold();
+    const saving = store.save();
+    expect(store.getState().mode).toBe("saving");
+    expect(store.paintStroke([ground(2, 2, 2)])).toBe(true);
+    storage.release();
+    expect(await saving).toBe(true);
+    const s = store.getState();
+    expect(s.mode).toBe("idle");
+    expect(s.dirty).toBe(true);
+  });
+
+  it("paintStroke returns false in dialog and loading modes", async () => {
+    const other = new MemoryStorage();
+    await storeWithNewProject(other);
+    const holder: { store?: ReturnType<typeof createEditorStore> } = {};
+    const seen: Array<{ mode: string; painted: boolean }> = [];
+    const probe = () =>
+      seen.push({ mode: holder.store!.getState().mode, painted: holder.store!.paintStroke([ground(4, 4, 4)]) });
+    const slow = new GatedStorage(Object.fromEntries(other.files));
+    let first = true;
+    const store = createEditorStore({
+      async pickNew() {
+        return folder(new MemoryStorage(), "/a");
+      },
+      async pickOpen() {
+        await Promise.resolve();
+        probe();
+        return folder(slow, "/b");
+      },
+    });
+    holder.store = store;
+    await store.newProject("A");
+    // loading: reading the picked folder
+    const origRead = slow.read.bind(slow);
+    slow.read = async (p: string) => {
+      if (first) {
+        first = false;
+        probe();
+      }
+      return origRead(p);
+    };
+    expect(await store.open()).toBe(true);
+    expect(seen.map((x) => x.mode)).toEqual(["dialog", "loading"]);
+    expect(seen.every((x) => x.painted === false)).toBe(true);
+  });
+});
+
+describe("migration notice and backup", () => {
+  async function openV1(storage: MemoryStorage) {
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.open()).toBe(true);
+    return store;
+  }
+
+  it("a v1 project gives a notice; save writes the backup and clears the notice", async () => {
+    const storage = v1Storage();
+    const store = await openV1(storage);
+    expect(store.getState().notice).toMatch(/\.nestst-backup/);
+    expect(backupPaths(storage)).toEqual([]);
+    expect(await store.save()).toBe(true);
+    expect(store.getState().notice).toBeNull();
+    const paths = backupPaths(storage);
+    expect(paths.length).toBe(2);
+    expect(paths.some((p) => p.endsWith(`/${MANIFEST_FILE}`))).toBe(true);
+  });
+
+  it("a second save does not create another backup", async () => {
+    const storage = v1Storage();
+    const store = await openV1(storage);
+    await store.save();
+    const before = backupPaths(storage);
+    store.paintStroke([ground(0, 0, 5)]);
+    expect(await store.save()).toBe(true);
+    expect(backupPaths(storage)).toEqual(before);
+  });
+
+  it("dismissNotice clears the notice", async () => {
+    const store = await openV1(v1Storage());
+    store.dismissNotice();
+    expect(store.getState().notice).toBeNull();
+  });
+
+  it("a v2 project gives no notice", async () => {
+    const { storage } = await storeWithNewProject();
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.open()).toBe(true);
+    expect(store.getState().notice).toBeNull();
+  });
+});

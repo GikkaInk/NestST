@@ -7,7 +7,7 @@ import {
   paintCommand,
   saveProject,
 } from "@nestst/core";
-import type { Project, ProjectStorage, TileEdit } from "@nestst/core";
+import type { BackupFile, Project, ProjectStorage, TileEdit } from "@nestst/core";
 
 export type Tool = "brush" | "eraser";
 export const TOOLS: readonly Tool[] = ["brush", "eraser"];
@@ -28,6 +28,13 @@ export interface ProjectSession {
   pickOpen(): Promise<OpenedFolder | null>;
 }
 
+export type EditorMode = "idle" | "saving" | "loading" | "dialog";
+
+/** New/Open/Save must not start while the editor is doing something else. */
+export function isBusy(s: Pick<EditorState, "mode">): boolean {
+  return s.mode !== "idle";
+}
+
 export interface EditorState {
   project: Project | null;
   currentMapId: string | null;
@@ -39,8 +46,13 @@ export interface EditorState {
   error: string | null;
   canUndo: boolean;
   canRedo: boolean;
-  /** A new/open/save is running. */
-  busy: boolean;
+  /**
+   * What the store is doing: `dialog` = the folder dialog is open, `loading` =
+   * reading/writing the picked folder, `saving` = a save is running.
+   */
+  mode: EditorMode;
+  /** Plain English info message (e.g. about the format update), or null. */
+  notice: string | null;
   projectName: string;
   rootLabel: string;
 }
@@ -61,6 +73,7 @@ export interface EditorStore {
   selectTool(tool: Tool): void;
   selectTile(tile: number): void;
   dismissError(): void;
+  dismissNotice(): void;
 }
 
 /** Tile a stroke paints with the current tool: the eraser paints 0 (empty). */
@@ -69,6 +82,8 @@ export function strokeTile(state: Pick<EditorState, "tool" | "selectedTile">): n
 }
 
 const HISTORY_LIMIT = 200;
+const MIGRATION_NOTICE =
+  "Project updated to the new format. A backup of the old files will be saved to .nestst-backup when you save.";
 
 function describe(e: unknown): string {
   if (e instanceof Error && e.message) return e.message;
@@ -128,6 +143,9 @@ export function createEditorStore(session: ProjectSession): EditorStore {
   const CHANGED_DURING_DIALOG =
     "The project changed while the folder dialog was open, so nothing was opened. Save or undo your changes and try again.";
 
+  // Old-format files to copy into .nestst-backup on the next successful save.
+  let pendingBackup: readonly BackupFile[] = [];
+
   let state: EditorState = {
     project: null,
     currentMapId: null,
@@ -137,7 +155,8 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     error: null,
     canUndo: false,
     canRedo: false,
-    busy: false,
+    mode: "idle",
+    notice: null,
     projectName: "",
     rootLabel: "",
   };
@@ -164,11 +183,13 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     const mapId = Object.hasOwn(project.maps, project.manifest.startMapId)
       ? project.manifest.startMapId
       : (project.manifest.maps[0]?.id ?? null);
+    pendingBackup = project.migratedFrom ?? [];
     set({
       project,
       currentMapId: mapId,
       error: null,
-      busy: false,
+      mode: "idle",
+      notice: pendingBackup.length > 0 ? MIGRATION_NOTICE : null,
       projectName: project.manifest.name,
       rootLabel: picked.label,
       ...historyPatch(),
@@ -176,7 +197,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
   };
 
   const fail = (prefix: string, e: unknown): false => {
-    set({ busy: false, error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
+    set({ mode: "idle", error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
     return false;
   };
 
@@ -200,7 +221,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     },
 
     async newProject(name) {
-      if (state.busy) return false;
+      if (isBusy(state)) return false;
       let project: Project;
       try {
         project = createEmptyProject(name);
@@ -208,13 +229,14 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         return fail("", e);
       }
       const versionAtStart = version;
-      set({ busy: true });
+      set({ mode: "dialog" });
       const picked = await pick("pickNew");
       if (picked === "failed") return false;
       if (picked === null) {
-        set({ busy: false });
+        set({ mode: "idle" });
         return false;
       }
+      set({ mode: "loading" });
       if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
       try {
         if (await picked.storage.exists(MANIFEST_FILE)) {
@@ -242,21 +264,22 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     },
 
     async open() {
-      if (state.busy) return false;
+      if (isBusy(state)) return false;
       const versionAtStart = version;
-      set({ busy: true });
+      set({ mode: "dialog" });
       const picked = await pick("pickOpen");
       if (picked === "failed") return false;
       if (picked === null) {
-        set({ busy: false });
+        set({ mode: "idle" });
         return false;
       }
+      set({ mode: "loading" });
       let project: Project;
       try {
         project = await loadProject(picked.storage);
       } catch (e) {
         const keep = state.project ? " Your current project is still open." : "";
-        set({ busy: false, error: `Could not open the project. ${ensurePeriod(capitalize(describe(e)))}${keep}` });
+        set({ mode: "idle", error: `Could not open the project. ${ensurePeriod(capitalize(describe(e)))}${keep}` });
         return false;
       }
       if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
@@ -266,28 +289,33 @@ export function createEditorStore(session: ProjectSession): EditorStore {
 
     async save() {
       const project = state.project;
-      if (state.busy || project === null || storage === null) return false;
+      if (isBusy(state) || project === null || storage === null) return false;
       const idAtStart = topId();
-      set({ busy: true });
+      const backup = pendingBackup;
+      set({ mode: "saving" });
       try {
-        await saveProject(storage, project);
+        await saveProject(storage, project, { backup });
       } catch (e) {
         set({
-          busy: false,
+          mode: "idle",
           error: `Could not save the project. ${ensurePeriod(capitalize(describe(e)))} Your changes are still here, so you can try again.`,
         });
         return false;
       }
       savedId = idAtStart;
-      set({ busy: false, error: null, ...historyPatch() });
+      const backedUp = backup.length > 0;
+      if (backedUp) pendingBackup = [];
+      set({ mode: "idle", error: null, ...(backedUp ? { notice: null } : {}), ...historyPatch() });
       return true;
     },
 
     paintStroke(edits) {
       const project = state.project;
       const mapId = state.currentMapId;
-      // While new/open/save runs the project must stay as it is (see `version`).
-      if (state.busy || project === null || mapId === null || edits.length === 0) return false;
+      // While the folder dialog or a load is pending the project must stay as it
+      // is (see `version`). Strokes during a save stay unsaved: savedId is the id
+      // captured when the save started.
+      if (state.mode === "dialog" || state.mode === "loading" || project === null || mapId === null || edits.length === 0) return false;
       const map = project.maps[mapId];
       if (map === undefined) return false;
       let next: Project;
@@ -335,6 +363,10 @@ export function createEditorStore(session: ProjectSession): EditorStore {
 
     dismissError() {
       if (state.error !== null) set({ error: null });
+    },
+
+    dismissNotice() {
+      if (state.notice !== null) set({ notice: null });
     },
   };
 }

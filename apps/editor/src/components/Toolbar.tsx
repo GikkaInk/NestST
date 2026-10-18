@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { isBusy } from "../editorStore.js";
 import type { EditorStore, Tool } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
 import {
@@ -67,10 +68,10 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   return (
     <div className="toolbar" role="toolbar" aria-label="Editor tools">
       <div className="toolbar__group">
-        <ToolButton label="New project" onClick={onNew} disabled={s.busy}>
+        <ToolButton label="New project" onClick={onNew} disabled={isBusy(s)}>
           <IconNew />
         </ToolButton>
-        <ToolButton label="Open project" onClick={onOpen} disabled={s.busy}>
+        <ToolButton label="Open project" onClick={onOpen} disabled={isBusy(s)}>
           <IconOpen />
         </ToolButton>
         <ToolButton
@@ -78,7 +79,7 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
           shortcut="Ctrl + S"
           className="tool-button tool-button--primary"
           onClick={() => void store.save()}
-          disabled={!hasProject || s.busy}
+          disabled={!hasProject || isBusy(s)}
           showLabel
         >
           <IconSave />

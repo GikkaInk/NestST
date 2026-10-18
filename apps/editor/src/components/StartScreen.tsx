@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
+import { isBusy } from "../editorStore.js";
 import type { EditorStore } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
 import { IconOpen } from "./icons.js";
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export function StartScreen({ store, onDone, onBack }: Props) {
-  const { busy } = useEditorState(store);
+  const busy = isBusy(useEditorState(store));
   const [name, setName] = useState("");
   const nameId = useId();
   const hintId = useId();
