@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { NestError, describeFirstIssue, messageForIssue } from "./errors.js";
 
-export const CURRENT_SCHEMA_VERSION = 1;
+/** Current format version of each file kind. */
+export const FORMAT_VERSIONS = { manifest: 1, map: 1 } as const;
+export type FormatKind = keyof typeof FORMAT_VERSIONS;
 export const MAX_TILE_ID = 255;
 export const MAX_MAP_SIZE = 2048;
 export const MAX_LAYERS = 16;
@@ -28,12 +30,13 @@ const idSchema = z
   .regex(ID_PATTERN, { error: ID_MESSAGE })
   .refine((v) => !RESERVED_ID.test(v), { error: RESERVED_MESSAGE });
 
-const schemaVersionSchema = z.literal(CURRENT_SCHEMA_VERSION, {
-  error: (iss) =>
-    iss.input === undefined
-      ? "this field is missing"
-      : `format version must be ${CURRENT_SCHEMA_VERSION}`,
-});
+const schemaVersionSchema = <K extends FormatKind>(kind: K) =>
+  z.literal(FORMAT_VERSIONS[kind], {
+    error: (iss) =>
+      iss.input === undefined
+        ? "this field is missing"
+        : `format version must be ${FORMAT_VERSIONS[kind]}`,
+  });
 
 const TILE_MESSAGE = `must be a whole number from 0 to ${MAX_TILE_ID}`;
 
@@ -68,7 +71,7 @@ export const tileLayerSchema = z.looseObject({
 });
 
 export const gameMapSchema = z.looseObject({
-  schemaVersion: schemaVersionSchema,
+  schemaVersion: schemaVersionSchema("map"),
   id: idSchema,
   name: z.string().min(1).max(200),
   viewMode: z.literal("topdown", {
@@ -89,7 +92,7 @@ export const manifestMapEntrySchema = z.looseObject({
 });
 
 export const projectManifestSchema = z.looseObject({
-  schemaVersion: schemaVersionSchema,
+  schemaVersion: schemaVersionSchema("manifest"),
   name: z.string().min(1).max(200),
   resolution: z.looseObject({
     width: intRange(1, 16384),

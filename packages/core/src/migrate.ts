@@ -1,8 +1,9 @@
-import { CURRENT_SCHEMA_VERSION } from "./schema.js";
+import { FORMAT_VERSIONS } from "./schema.js";
+import type { FormatKind } from "./schema.js";
 import { NestError } from "./errors.js";
 
 export interface MigrationStep {
-  kind: "manifest" | "map";
+  kind: FormatKind;
   from: number;
   to: number;
   run(raw: Record<string, unknown>): Record<string, unknown>;
@@ -17,7 +18,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /** Internal: same as `migrateRaw` but with a configurable target version (for tests). */
 export function migrateToVersion(
-  kind: "manifest" | "map",
+  kind: FormatKind,
   raw: unknown,
   steps: MigrationStep[],
   file: string | undefined,
@@ -67,7 +68,12 @@ export function migrateToVersion(
     if (step.to > target) {
       return fail("migration_invalid", `${name} goes beyond the current format version ${target}`);
     }
-    data = step.run(data);
+    try {
+      data = step.run(data);
+    } catch (e) {
+      if (e instanceof NestError) throw e;
+      return fail("migration_failed", `${name} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
     if (data.schemaVersion !== step.to) {
       return fail("migration_invalid", `${name} did not set schemaVersion to ${step.to}`);
     }
@@ -77,14 +83,14 @@ export function migrateToVersion(
 }
 
 /**
- * Brings raw data up to CURRENT_SCHEMA_VERSION. Works on a copy and never
+ * Brings raw data up to the current format version of its kind. Works on a copy and never
  * mutates the input. The single place that rejects files from newer versions.
  */
 export function migrateRaw(
-  kind: "manifest" | "map",
+  kind: FormatKind,
   raw: unknown,
   steps: MigrationStep[] = MIGRATIONS,
   file?: string,
 ): unknown {
-  return migrateToVersion(kind, raw, steps, file, CURRENT_SCHEMA_VERSION);
+  return migrateToVersion(kind, raw, steps, file, FORMAT_VERSIONS[kind]);
 }

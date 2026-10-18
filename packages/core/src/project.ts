@@ -1,6 +1,6 @@
 import { NestError } from "./errors.js";
 import { migrateRaw } from "./migrate.js";
-import { CURRENT_SCHEMA_VERSION, parseManifest, parseMap } from "./schema.js";
+import { FORMAT_VERSIONS, parseManifest, parseMap } from "./schema.js";
 import type { GameMap, ProjectManifest } from "./schema.js";
 import type { ProjectStorage } from "./storage.js";
 
@@ -36,7 +36,7 @@ export function createEmptyProject(name: string): Project {
     );
   }
   const map: GameMap = {
-    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaVersion: FORMAT_VERSIONS.map,
     id: DEFAULT_MAP_ID,
     name: "Main",
     viewMode: "topdown",
@@ -53,7 +53,7 @@ export function createEmptyProject(name: string): Project {
     ],
   };
   const manifest: ProjectManifest = {
-    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaVersion: FORMAT_VERSIONS.manifest,
     name: trimmed,
     resolution: { width: 1280, height: 720 },
     tileSize: DEFAULT_TILE_SIZE,

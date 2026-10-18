@@ -186,4 +186,21 @@ describe("migrateRaw", () => {
     const bad = thrown(() => migrateRaw("map", { schemaVersion: 0 }, [step(0, 1, "map", 5)], "maps/a.json"));
     expect(bad.file).toBe("maps/a.json");
   });
+
+  it("wraps an error thrown inside a step in migration_failed", () => {
+    const steps: MigrationStep[] = [
+      {
+        kind: "map",
+        from: 1,
+        to: 2,
+        run() {
+          throw new Error("boom");
+        },
+      },
+    ];
+    const e = thrown(() => migrateToVersion("map", { schemaVersion: 1 }, steps, "maps/a.json", 2));
+    expect(e.code).toBe("migration_failed");
+    expect(e.file).toBe("maps/a.json");
+    expect(e.message).toContain("migration from format version 1 to 2 failed: boom");
+  });
 });
