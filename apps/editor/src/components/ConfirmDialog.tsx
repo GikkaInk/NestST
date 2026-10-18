@@ -14,17 +14,20 @@ interface Props {
 export function ConfirmDialog({ title, message, discardLabel, onSave, onDiscard, onCancel }: Props) {
   const id = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // Latest callback, so the effect below runs once per opening and never steals focus.
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
   useEffect(() => {
     cancelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cancel.current();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onCancel]);
+  }, []);
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div

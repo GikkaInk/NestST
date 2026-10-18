@@ -194,3 +194,20 @@ describe("ConfirmDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("ConfirmDialog focus", () => {
+  it("re-rendering with new callbacks does not move focus back to Keep editing", () => {
+    const props = { title: "T", message: "M", discardLabel: "Don't save", onSave: () => {}, onDiscard: () => {} };
+    const { rerender } = render(<ConfirmDialog {...props} onCancel={() => {}} />);
+    const save = screen.getByRole("button", { name: "Save first" });
+    save.focus();
+    expect(document.activeElement).toBe(save);
+    const onCancel = vi.fn();
+    rerender(<ConfirmDialog {...props} onCancel={onCancel} />);
+    expect(document.activeElement).toBe(save);
+    // The latest onCancel is the one Escape calls.
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+

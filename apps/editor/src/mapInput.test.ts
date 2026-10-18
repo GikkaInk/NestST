@@ -4,6 +4,7 @@ import {
   centeredCamera,
   clampScale,
   createStroke,
+  isStrokePointer,
   lineCells,
   panBy,
   screenToCell,
@@ -162,3 +163,12 @@ describe("createStroke", () => {
     expect(stroke.add({ x: 1, y: 7 }).map((e) => e.y)).toEqual([1, 2, 3, 4]);
   });
 });
+
+describe("isStrokePointer", () => {
+  it("accepts only the pointer that started the stroke", () => {
+    expect(isStrokePointer(3, 3)).toBe(true);
+    expect(isStrokePointer(3, 4)).toBe(false);
+    expect(isStrokePointer(null, 3)).toBe(false);
+  });
+});
+

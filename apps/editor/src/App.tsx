@@ -56,7 +56,8 @@ export function App({ store }: { store: EditorStore }) {
     () =>
       onCloseRequested(() => {
         if (!store.getState().dirty) return false;
-        if (pendingRef.current === null) setPending("close");
+        // Also while a New/Open question is open: it becomes the close question.
+        setPending("close");
         return true;
       }),
     [store],

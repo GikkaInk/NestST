@@ -420,3 +420,66 @@ describe("tools, tiles and errors", () => {
     expect(a.selectedTile).toBe(1);
   });
 });
+
+describe("dirty tracking after the history overflows (limit 200)", () => {
+  // Stroke k paints its own cell, so every stroke really changes the map.
+  const strokeN = (store: ReturnType<typeof createEditorStore>, k: number) =>
+    expect(store.paintStroke([ground(k % 32, Math.floor(k / 32), 1)])).toBe(true);
+  const undoAll = (store: ReturnType<typeof createEditorStore>) => {
+    while (store.getState().canUndo) store.undo();
+  };
+
+  it("201 strokes then undo everything: still dirty, the first stroke cannot be undone", async () => {
+    const { store, storage } = await storeWithNewProject();
+    for (let k = 0; k < 201; k++) strokeN(store, k);
+    undoAll(store);
+    expect(tilesOf(store)[0]).toBe(1);
+    expect(store.getState().dirty).toBe(true);
+    expect((await loadProject(storage)).maps.main!.layers[0]!.tiles[0]).toBe(0);
+  });
+
+  it("saved before the overflow: undo back to the saved point is clean, past it dirty", async () => {
+    const { store } = await storeWithNewProject();
+    for (let k = 0; k < 150; k++) strokeN(store, k);
+    await store.save();
+    for (let k = 150; k < 250; k++) strokeN(store, k);
+    for (let i = 0; i < 100; i++) store.undo();
+    expect(store.getState().dirty).toBe(false);
+    undoAll(store);
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it("saved state evicted from history: undo all is dirty, redo back to it is clean", async () => {
+    const { store } = await storeWithNewProject();
+    for (let k = 0; k < 150; k++) strokeN(store, k);
+    await store.save();
+    for (let k = 150; k < 400; k++) strokeN(store, k);
+    undoAll(store);
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it("a save after the overflow resets the baseline", async () => {
+    const { store } = await storeWithNewProject();
+    for (let k = 0; k < 201; k++) strokeN(store, k);
+    expect(await store.save()).toBe(true);
+    expect(store.getState().dirty).toBe(false);
+    undoAll(store);
+    expect(store.getState().dirty).toBe(true);
+    while (store.getState().canRedo) store.redo();
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  it("opening a project after an overflow starts clean", async () => {
+    const storage = new MemoryStorage();
+    const store = createEditorStore(fakeSession(folder(storage), folder(storage)));
+    await store.newProject("A");
+    for (let k = 0; k < 201; k++) strokeN(store, k);
+    await store.save();
+    expect(await store.open()).toBe(true);
+    expect(store.getState().dirty).toBe(false);
+    strokeN(store, 300);
+    store.undo();
+    expect(store.getState().dirty).toBe(false);
+  });
+});
+

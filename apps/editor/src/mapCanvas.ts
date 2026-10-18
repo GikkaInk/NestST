@@ -18,6 +18,7 @@ import {
   wheelZoomFactor,
   zoomAt,
   createStroke,
+  isStrokePointer,
 } from "./mapInput.js";
 import type { Camera, Cell, Stroke } from "./mapInput.js";
 
@@ -88,6 +89,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
   let hoverCell: Cell | null = null;
 
   let stroke: Stroke | null = null;
+  let strokePointer: number | null = null;
   let preview: GameMap | null = null;
   let pan: { id: number; x: number; y: number } | null = null;
   let spaceDown = false;
@@ -206,6 +208,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     if (stroke === null) return;
     const edits = stroke.edits;
     stroke = null;
+    strokePointer = null;
     preview = null;
     store.paintStroke(edits);
     // Always redraw from the store: replaces the preview even if nothing was recorded.
@@ -233,6 +236,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     host.focus({ preventScroll: true });
     capture(e.pointerId);
     stroke = createStroke(map, layer.id, strokeTile(store.getState()));
+    strokePointer = e.pointerId;
     preview = map;
     addStrokePoint(p);
     drawOverlays();
@@ -247,7 +251,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
       applyCamera();
       return;
     }
-    if (stroke !== null) {
+    if (stroke !== null && isStrokePointer(strokePointer, e.pointerId)) {
       // Coalesced events give every pointer sample of this frame; Bresenham fills the rest.
       const samples = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
       for (const s of samples.length > 0 ? samples : [e]) addStrokePoint(local(s));
@@ -262,7 +266,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
       mode();
       drawOverlays();
     }
-    finishStroke();
+    if (isStrokePointer(strokePointer, e.pointerId)) finishStroke();
   };
 
   const onLeave = (): void => setHover(null);
@@ -332,6 +336,8 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
         antialias: false,
         preference: "webgl",
         resolution: window.devicePixelRatio || 1,
+        // Snap sprites to device pixels: no 1-px seams between chunks at fractional zoom.
+        roundPixels: true,
         autoDensity: true,
       });
     } catch (err) {

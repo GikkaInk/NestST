@@ -93,6 +93,11 @@ export function fitScale(mapW: number, mapH: number, screenW: number, screenH: n
   return clampScale(s);
 }
 
+/** A stroke follows only the pointer that started it; other pointers (a second touch, pen) are ignored. */
+export function isStrokePointer(strokePointerId: number | null, eventPointerId: number): boolean {
+  return strokePointerId !== null && strokePointerId === eventPointerId;
+}
+
 export interface Stroke {
   /** Adds the cell under the pointer; returns the new edits (line from the previous cell). */
   add(cell: Cell): TileEdit[];

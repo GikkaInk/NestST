@@ -117,7 +117,10 @@ export function createEditorStore(session: ProjectSession): EditorStore {
   let doneIds: number[] = [];
   let undoneIds: number[] = [];
   let savedId = 0;
-  const topId = () => doneIds.at(-1) ?? 0;
+  // Id of the state the oldest remaining undo step returns to: 0 (the opened
+  // state) until the history overflows, then the id of the last evicted step.
+  let floorId = 0;
+  const topId = () => doneIds.at(-1) ?? floorId;
 
   let state: EditorState = {
     project: null,
@@ -151,6 +154,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     doneIds = [];
     undoneIds = [];
     savedId = 0;
+    floorId = 0;
     const mapId = Object.hasOwn(project.maps, project.manifest.startMapId)
       ? project.manifest.startMapId
       : (project.manifest.maps[0]?.id ?? null);
@@ -275,7 +279,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         return fail("Could not paint there. ", e);
       }
       doneIds.push(nextStepId++);
-      if (doneIds.length > HISTORY_LIMIT) doneIds.shift();
+      if (doneIds.length > HISTORY_LIMIT) floorId = doneIds.shift()!;
       undoneIds = [];
       set({ project: next, ...historyPatch() });
       return true;
