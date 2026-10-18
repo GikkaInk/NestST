@@ -37,6 +37,8 @@ The first template is a top-down JRPG. Other game modes (for example a side view
 
 <img src="docs/images/editor-nest-island.png" alt="Screenshot of the M1 editor in dark theme with the Nest Island example open: a tile palette on the left, a 48 by 32 map in the middle showing a crescent island with a beach, a village of four houses, a pond, trees and flowers in a blue sea, and a toolbar with new, open, save, undo, redo, brush, eraser and zoom." width="70%">
 
+<sub>*Nest Island*, a tiny example map made with the editor itself. Open the folder [`examples/nest-island`](examples/nest-island) to explore it.</sub>
+
 </div>
 
 ## 🌸 Try the M1 editor
