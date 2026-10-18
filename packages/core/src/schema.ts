@@ -18,7 +18,15 @@ function intRange(min: number, max: number) {
   return z.number({ error }).int({ error }).min(min, { error }).max(max, { error });
 }
 
-const idSchema = z.string().regex(ID_PATTERN, { error: ID_MESSAGE });
+/** Device names Windows refuses as file names (`maps/<id>.json` must work everywhere). */
+const RESERVED_ID = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+const RESERVED_MESSAGE =
+  "id is a reserved device name on Windows (con, prn, aux, nul, com1-com9, lpt1-lpt9); choose another id";
+
+const idSchema = z
+  .string()
+  .regex(ID_PATTERN, { error: ID_MESSAGE })
+  .refine((v) => !RESERVED_ID.test(v), { error: RESERVED_MESSAGE });
 
 const schemaVersionSchema = z.literal(CURRENT_SCHEMA_VERSION, {
   error: (iss) =>

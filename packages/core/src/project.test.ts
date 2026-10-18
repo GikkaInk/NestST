@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ import {
   saveProject,
 } from "./index.js";
 import type { GameMap, Project } from "./index.js";
+import { serializeMap } from "./project.js";
 import { MemoryStorage, NodeFsStorage } from "./testing.js";
 
 async function rejected(p: Promise<unknown>): Promise<NestError> {
@@ -287,6 +288,63 @@ describe("saveProject / loadProject", () => {
   });
 });
 
+describe("map serialization", () => {
+  it("tiles are written one map row per line, the rest pretty-printed", async () => {
+    const storage = new MemoryStorage();
+    const project = createEmptyProject("Моя игра");
+    project.maps.main!.layers[0]!.tiles[33] = 5;
+    (project.maps.main as Record<string, unknown>).weather = { "tiles": [1, 2], note: "дождь" };
+    (project.maps.main!.layers[0] as Record<string, unknown>).opacity = 0.5;
+    await saveProject(storage, project);
+    const text = storage.files.get("maps/main.json")!;
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThan(100);
+    expect(lines.length).toBeGreaterThan(24);
+    const rows = lines.filter((l) => /^\s+\d+(,\d+)+,?$/.test(l)); // unknown weather.tiles stays one item per line
+    expect(rows).toHaveLength(24);
+    for (const row of rows) expect(row.trim().replace(/,$/, "").split(",")).toHaveLength(32);
+    expect(rows[1]!.trim()).toBe(`0,5,${new Array(30).fill(0).join(",")},`);
+    expect(text).toContain('\n  "name": "Main",\n'); // other keys keep 2-space pretty printing
+    expect(JSON.parse(text)).toEqual(project.maps.main);
+    expect(await loadProject(storage)).toEqual(project);
+  });
+
+  it("several layers and a 1-wide map", () => {
+    const map: GameMap = {
+      schemaVersion: 1, id: "thin", name: "Узкая", viewMode: "topdown", width: 1, height: 3, tileSize: 16,
+      layers: [
+        { id: "a", name: "A", visible: true, tiles: [1, 2, 3] },
+        { id: "b", name: "B", visible: false, tiles: [4, 5, 6], extra: "__nestst_tiles__" },
+      ],
+    };
+    const text = serializeMap(map);
+    expect(JSON.parse(text)).toEqual(map);
+    expect(text.endsWith("}\n")).toBe(true);
+  });
+
+  it("loads old fully pretty-printed map files too", async () => {
+    const storage = new MemoryStorage();
+    const project = createEmptyProject("Моя игра");
+    await saveProject(storage, project);
+    storage.files.set("maps/main.json", JSON.stringify(project.maps.main, null, 2));
+    storage.files.set(MANIFEST_FILE, JSON.stringify(project.manifest));
+    expect(await loadProject(storage)).toEqual(project);
+  });
+
+  it("2048×2048 map stays well under 40 MB", { timeout: 60_000 }, () => {
+    const size = 2048;
+    const map: GameMap = {
+      schemaVersion: 1, id: "big", name: "Big", viewMode: "topdown", width: size, height: size, tileSize: 32,
+      layers: [{ id: "ground", name: "Ground", visible: true, tiles: new Array<number>(size * size).fill(0) }],
+    };
+    const text = serializeMap(map);
+    expect(text.length).toBeLessThan(10 * 1024 * 1024);
+    expect(text.split("\n").length).toBeLessThan(size + 50);
+    const back = parseMap(JSON.parse(text));
+    expect(back.layers[0]!.tiles.length).toBe(size * size);
+  });
+});
+
 describe("MemoryStorage", () => {
   it("fails exactly on the configured write and stores nothing for it", async () => {
     const s = new MemoryStorage();
@@ -328,6 +386,44 @@ describe("NodeFsStorage", () => {
     expect(await readdir(join(dir, "maps"))).toEqual(["main.json"]);
   });
 
+  it("failed write keeps the old file and leaves no temp file", async () => {
+    base = await mkdtemp(join(tmpdir(), "nestst-"));
+    const storage = new NodeFsStorage(base);
+    // Target is a directory: rename over it fails, temp file must be removed.
+    await mkdir(join(base, "maps", "dir.json"), { recursive: true });
+    await expect(storage.writeAtomic("maps/dir.json", "{}")).rejects.toThrow();
+    expect(await readdir(join(base, "maps"))).toEqual(["dir.json"]);
+    expect(await readdir(join(base, "maps", "dir.json"))).toEqual([]);
+
+    // Read-only folder: the temp file cannot be created, old content stays.
+    await writeFile(join(base, "maps", "main.json"), "old");
+    if (process.getuid?.() === 0) return; // root ignores permissions
+    await chmod(join(base, "maps"), 0o555);
+    try {
+      await expect(storage.writeAtomic("maps/main.json", "new")).rejects.toThrow();
+    } finally {
+      await chmod(join(base, "maps"), 0o755);
+    }
+    expect(await readFile(join(base, "maps", "main.json"), "utf8")).toBe("old");
+    expect((await readdir(join(base, "maps"))).sort()).toEqual(["dir.json", "main.json"]);
+
+    // saveProject wraps such failures as save_failed and keeps the old manifest.
+    const project = createEmptyProject("Моя игра");
+    await saveProject(storage, project);
+    const manifestBefore = await readFile(join(base, MANIFEST_FILE), "utf8");
+    await chmod(join(base, "maps"), 0o555);
+    try {
+      project.manifest.name = "Другая";
+      const err = await rejected(saveProject(storage, project));
+      expect(err.code).toBe("save_failed");
+      expect(err.file).toBe("maps/main.json");
+    } finally {
+      await chmod(join(base, "maps"), 0o755);
+    }
+    expect(await readFile(join(base, MANIFEST_FILE), "utf8")).toBe(manifestBefore);
+    expect((await readdir(join(base, "maps"))).filter((n) => n.includes(".tmp-"))).toEqual([]);
+  });
+
   it("exists/read on missing files, and unsafe paths are refused", async () => {
     base = await mkdtemp(join(tmpdir(), "nestst-"));
     const storage = new NodeFsStorage(base);
@@ -351,7 +447,28 @@ describe("package boundaries", () => {
     for (const name of await readdir(dir)) {
       if (!name.endsWith(".ts") || name.endsWith(".test.ts") || name === "testing.ts") continue;
       const text = await readFile(join(dir, name), "utf8");
-      expect(text, name).not.toMatch(/from\s+["']node:|reference types="node"|\bprocess\./);
+      const forbidden = [
+        /reference\s+types\s*=\s*["']node["']/,
+        /\brequire\s*\(/,
+        /\bimport\s*\(/,
+        /\bBuffer\b/,
+        /\bprocess\b/,
+        /\b__dirname\b|\b__filename\b/,
+      ];
+      for (const re of forbidden) expect(text, `${name}: ${re}`).not.toMatch(re);
+      // Static imports and re-exports: only relative modules and zod.
+      const specifiers = [...text.matchAll(/\b(?:from|import)\s+["']([^"']+)["']/g)].map((m) => m[1]!);
+      for (const spec of specifiers) {
+        expect(spec.startsWith("./") || spec === "zod", `${name}: import "${spec}"`).toBe(true);
+      }
+    }
+  });
+
+  it("the guard itself recognises Node imports", () => {
+    const samples = ['import fs from "fs";', 'import { join } from "path";', 'export * from "os";', 'import "node:fs";'];
+    for (const s of samples) {
+      const spec = /\b(?:from|import)\s+["']([^"']+)["']/.exec(s)![1]!;
+      expect(spec.startsWith("./") || spec === "zod").toBe(false);
     }
   });
 });

@@ -68,6 +68,40 @@ function serialize(data: unknown): string {
 }
 
 /**
+ * Map as pretty JSON (2 spaces), except that each layer's `tiles` array is
+ * written compactly, one map row (`width` comma-separated numbers) per line. Readers see plain
+ * JSON either way. Works by stringifying with unique string placeholders in
+ * place of `tiles` and splicing the rows in afterwards.
+ */
+export function serializeMap(map: GameMap): string {
+  for (;;) {
+    const token = `__nestst_tiles_${Math.random().toString(36).slice(2)}_`;
+    const placeholder = (i: number) => `${token}${i}__`;
+    const shell = {
+      ...map,
+      layers: map.layers.map((layer, i) => ({ ...layer, tiles: placeholder(i) })),
+    };
+    const text = serialize(shell);
+    // Retry in the (practically impossible) case user data contains the token.
+    if (text.split(token).length - 1 !== map.layers.length) continue;
+    let out = text;
+    map.layers.forEach((layer, i) => {
+      const quoted = `"${placeholder(i)}"`;
+      const at = out.indexOf(quoted);
+      const lineStart = out.lastIndexOf("\n", at) + 1;
+      const indent = /^ */.exec(out.slice(lineStart))![0];
+      const rows: string[] = [];
+      for (let r = 0; r * map.width < layer.tiles.length; r++) {
+        rows.push(layer.tiles.slice(r * map.width, (r + 1) * map.width).join(","));
+      }
+      const body = `[\n${indent}  ${rows.join(`,\n${indent}  `)}\n${indent}]`;
+      out = out.slice(0, at) + body + out.slice(at + quoted.length);
+    });
+    return out;
+  }
+}
+
+/**
  * Saves the project. Everything is validated first, so nothing is written if
  * the project is invalid. Then all maps are written, and the manifest LAST.
  *
@@ -89,7 +123,7 @@ export async function saveProject(storage: ProjectStorage, project: Project): Pr
       );
     }
   }
-  const files: Array<{ path: string; data: unknown }> = [];
+  const files: Array<{ path: string; text: string }> = [];
   for (const entry of manifest.maps) {
     const map = Object.hasOwn(project.maps, entry.id) ? project.maps[entry.id] : undefined;
     if (map === undefined) {
@@ -107,14 +141,16 @@ export async function saveProject(storage: ProjectStorage, project: Project): Pr
         entry.file,
       );
     }
-    files.push({ path: entry.file, data: parsed });
+    files.push({ path: entry.file, text: serializeMap(parsed) });
   }
-  files.push({ path: MANIFEST_FILE, data: manifest });
+  files.push({ path: MANIFEST_FILE, text: serialize(manifest) });
 
-  for (const { path, data } of files) {
+  for (const { path, text } of files) {
     try {
-      await storage.writeAtomic(path, serialize(data));
+      await storage.writeAtomic(path, text);
     } catch (e) {
+      // A NestError from the storage (e.g. unsafe_path) already explains the
+      // problem and is passed through unchanged; any other failure becomes save_failed.
       if (e instanceof NestError) throw e;
       throw new NestError("save_failed", `Could not save file ${path}: ${errorText(e)}`, path);
     }

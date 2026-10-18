@@ -176,6 +176,23 @@ describe("parseManifest", () => {
     expect(manifestError(validManifest({ startMapId: "A" })).message).toContain("startMapId");
   });
 
+  it("Windows reserved device names are refused as ids", () => {
+    const reserved = ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9"];
+    for (const id of reserved) {
+      const maps = [{ id, file: `maps/${id}.json` }];
+      const m = manifestError(validManifest({ maps, startMapId: id }));
+      expect(m.message).toContain("maps[0].id");
+      expect(m.message).toContain("reserved");
+      expect(manifestError(validManifest({ startMapId: id })).message).toContain("startMapId");
+      const e = mapError(validMap({ id }));
+      expect(e.message).toContain("field id");
+      expect(e.message).toContain("reserved");
+    }
+    for (const id of ["con1", "com0", "com10", "lpt", "console", "nul_", "aux-map"]) {
+      expect(() => parseMap(validMap({ id }))).not.toThrow();
+    }
+  });
+
   it("resolution, non-object, missing fields, wrong version", () => {
     expect(manifestError(validManifest({ resolution: { width: 0, height: 360 } })).message).toContain(
       "resolution.width: must be a whole number from 1 to 16384",
