@@ -7,8 +7,10 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  BACKUP_DIR,
   History,
   MANIFEST_FILE,
   NestError,
@@ -19,7 +21,9 @@ import {
   saveProject,
 } from "./index.js";
 import type { Project, TileEdit } from "./index.js";
-import { NodeFsStorage } from "./testing.js";
+import { MemoryStorage, NodeFsStorage } from "./testing.js";
+
+const EXAMPLE = fileURLToPath(new URL("../../../examples/nest-island/", import.meta.url));
 
 const NAME = "Тест с пробелами и кириллицей";
 
@@ -249,5 +253,47 @@ describe("end-to-end project on disk", () => {
     await mkdir(empty);
     await rejected(saveProject(new NodeFsStorage(empty), project));
     expect(await listFiles(empty)).toEqual([]);
+  });
+});
+
+describe("v1 to v2 migration round trip", () => {
+  const FIXTURES = fileURLToPath(new URL("./fixtures/v1/", import.meta.url));
+  const FILES = [MANIFEST_FILE, "maps/main.json"];
+
+  async function v1Files(): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for (const f of FILES) out[f] = await readFile(join(FIXTURES, f), "utf8");
+    return out;
+  }
+
+  it("backs up v1 files byte for byte, saves v2 and loads it without migration", async () => {
+    const originals = await v1Files();
+    const storage = new MemoryStorage(originals);
+    const loaded = await loadProject(storage);
+    expect(loaded.migratedFrom).toBeDefined();
+
+    const now = new Date(Date.UTC(2026, 9, 19, 12, 30, 45));
+    await saveProject(storage, loaded, { backup: loaded.migratedFrom, now });
+
+    for (const f of FILES) {
+      expect(storage.files.get(`${BACKUP_DIR}/20261019-123045/${f}`)).toBe(originals[f]);
+    }
+
+    const reloaded = await loadProject(storage);
+    expect(reloaded.migratedFrom ?? []).toEqual([]);
+    expect(reloaded.manifest.schemaVersion).toBe(2);
+    expect(reloaded.maps["main"]!.schemaVersion).toBe(2);
+    expect(reloaded.maps["main"]!.layers.map((l) => l.tiles)).toEqual(
+      loaded.maps["main"]!.layers.map((l) => l.tiles),
+    );
+    const original = JSON.parse(originals["maps/main.json"]!) as { layers: Array<{ tiles: number[] }> };
+    expect(reloaded.maps["main"]!.layers.map((l) => l.tiles)).toEqual(original.layers.map((l) => l.tiles));
+  });
+
+  it("the example project is saved as v2 and loads without migration", async () => {
+    const project = await loadProject(new NodeFsStorage(EXAMPLE));
+    expect(project.migratedFrom ?? []).toEqual([]);
+    expect(project.manifest.schemaVersion).toBe(2);
+    expect(project.maps[project.manifest.startMapId]!.schemaVersion).toBe(2);
   });
 });
