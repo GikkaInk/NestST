@@ -4,6 +4,7 @@ import { closeWindow, onCloseRequested, setWindowTitle } from "./appWindow.js";
 import { useEditorState } from "./useEditorState.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ErrorBanner } from "./components/ErrorBanner.js";
+import { NoticeBanner } from "./components/NoticeBanner.js";
 import { MapEditor } from "./components/MapEditor.js";
 import { Palette } from "./components/Palette.js";
 import { StartScreen } from "./components/StartScreen.js";
@@ -124,6 +125,7 @@ export function App({ store }: { store: EditorStore }) {
       </header>
 
       <ErrorBanner message={s.error} onDismiss={store.dismissError} />
+      <NoticeBanner message={s.notice} onDismiss={store.dismissNotice} />
 
       {editing ? (
         <main className="workspace">
@@ -160,7 +162,12 @@ export function App({ store }: { store: EditorStore }) {
           onSave={() => {
             const kind = pending;
             setPending(null);
-            void store.save().then((ok) => ok && proceed(kind));
+            void store.save().then((ok) => {
+              if (!ok) return;
+              // Strokes made during the save are not on disk: ask again instead of leaving.
+              if (store.getState().dirty) setPending(kind);
+              else proceed(kind);
+            });
           }}
         />
       )}

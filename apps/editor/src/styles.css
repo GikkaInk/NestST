@@ -26,6 +26,7 @@
   --stage: #f3e6d6;
   --stage-dots: rgb(58 46 79 / 14%);
   --error-bg: var(--peach);
+  --notice-bg: var(--mint);
 
   /* Read by the Pixi map view (mapCanvas.ts). */
   --map-check-a: #fffdf8;
@@ -62,6 +63,7 @@
     --stage: #17131f;
     --stage-dots: rgb(255 248 239 / 10%);
     --error-bg: #5a3a4f;
+    --notice-bg: #34505a;
 
     --map-check-a: #2f2843;
     --map-check-b: #3a3150;
@@ -624,6 +626,29 @@ p {
 }
 
 .error-banner__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px var(--gap) 0;
+  padding: 8px 10px 8px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--notice-bg);
+}
+
+.notice-banner__face {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.notice-banner__text {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;

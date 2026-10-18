@@ -6,9 +6,13 @@ import { createEditorStore } from "../editorStore.js";
 import type { EditorStore, ProjectSession } from "../editorStore.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { ErrorBanner } from "./ErrorBanner.js";
+import { NoticeBanner } from "./NoticeBanner.js";
+import { App } from "../App.js";
 import { PALETTE_SIZE, Palette } from "./Palette.js";
 import { StartScreen } from "./StartScreen.js";
 import { Toolbar } from "./Toolbar.js";
+
+vi.mock("./MapEditor.js", () => ({ MapEditor: () => null }));
 
 afterEach(cleanup);
 
@@ -94,6 +98,85 @@ describe("ErrorBanner", () => {
     expect(store.getState().error).toBeNull();
     rerender(view());
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("NoticeBanner", () => {
+  it("renders nothing without a message", () => {
+    const { container } = render(<NoticeBanner message={null} onDismiss={() => {}} />);
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("shows the message as a status (not an alert) and dismisses it", () => {
+    const onDismiss = vi.fn();
+    render(<NoticeBanner message="Updated to the new format" onDismiss={onDismiss} />);
+    expect(screen.getByRole("status").textContent).toMatch(/Updated to the new format/);
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("App: Save first", () => {
+  /** Storage whose writes wait until `release()` is called. */
+  function gatedStorage() {
+    const inner = new MemoryStorage();
+    let hold = false;
+    let release: () => void = () => {};
+    return {
+      storage: {
+        read: (p: string) => inner.read(p),
+        exists: (p: string) => inner.exists(p),
+        async writeAtomic(p: string, d: string) {
+          if (hold) await new Promise<void>((r) => (release = r));
+          await inner.writeAtomic(p, d);
+        },
+      },
+      holdNext: () => {
+        hold = true;
+      },
+      release: () => {
+        hold = false;
+        release();
+      },
+    };
+  }
+
+  async function dirtyApp(gate: ReturnType<typeof gatedStorage>) {
+    const store = createEditorStore(session(gate.storage as unknown as MemoryStorage));
+    await store.newProject("Test");
+    store.paintStroke([{ layerId: "ground", x: 0, y: 0, tile: 1 }]);
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "New project" }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    return store;
+  }
+
+  it("leaves after a clean save", async () => {
+    const gate = gatedStorage();
+    const store = await dirtyApp(gate);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save first" }));
+    });
+    expect(store.getState().dirty).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Choose folder & create" })).toBeTruthy();
+  });
+
+  it("asks again, and does not leave, when strokes were made during the save", async () => {
+    const gate = gatedStorage();
+    const store = await dirtyApp(gate);
+    gate.holdNext();
+    fireEvent.click(screen.getByRole("button", { name: "Save first" }));
+    act(() => {
+      expect(store.paintStroke([{ layerId: "ground", x: 1, y: 0, tile: 1 }])).toBe(true);
+    });
+    await act(async () => {
+      gate.release();
+    });
+    expect(store.getState().dirty).toBe(true);
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Choose folder & create" })).toBeNull();
   });
 });
 
