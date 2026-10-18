@@ -195,7 +195,7 @@ describe("end-to-end project on disk", () => {
     await saveProject(new NodeFsStorage(dir), createEmptyProject(NAME));
     const mapPath = join(dir, "maps", "main.json");
     const raw = JSON.parse(await readFile(mapPath, "utf8")) as Record<string, unknown>;
-    const newer = JSON.stringify({ ...raw, schemaVersion: 2 });
+    const newer = JSON.stringify({ ...raw, schemaVersion: 3 });
     await writeFile(mapPath, newer);
 
     const err = await rejected(loadProject(new NodeFsStorage(dir)));

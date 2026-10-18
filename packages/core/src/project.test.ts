@@ -40,7 +40,7 @@ function thrown(fn: () => unknown): NestError {
 
 function addMap(project: Project, id: string, tile: number): GameMap {
   const map: GameMap = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id,
     name: `Карта ${id}`,
     viewMode: "topdown",
@@ -48,6 +48,7 @@ function addMap(project: Project, id: string, tile: number): GameMap {
     height: 2,
     tileSize: 32,
     layers: [{ id: "ground", name: "Ground", visible: true, tiles: [tile, tile, tile, tile] }],
+    objects: [],
   };
   project.maps[id] = map;
   project.manifest.maps.push({ id, file: `maps/${id}.json` });
@@ -67,7 +68,7 @@ describe("createEmptyProject", () => {
   it("builds the default project", () => {
     const p = createEmptyProject("  Моя игра  ");
     expect(p.manifest).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       name: "Моя игра",
       resolution: { width: 1280, height: 720 },
       tileSize: 32,
@@ -76,7 +77,7 @@ describe("createEmptyProject", () => {
     });
     expect(Object.keys(p.maps)).toEqual(["main"]);
     const map = p.maps.main!;
-    expect(map).toMatchObject({ schemaVersion: 1, id: "main", viewMode: "topdown", width: 32, height: 24, tileSize: 32 });
+    expect(map).toMatchObject({ schemaVersion: 2, objects: [], id: "main", viewMode: "topdown", width: 32, height: 24, tileSize: 32 });
     expect(map.layers).toHaveLength(1);
     expect(map.layers[0]).toMatchObject({ id: "ground", name: "Ground", visible: true });
     expect(map.layers[0]!.tiles).toHaveLength(32 * 24);
@@ -216,7 +217,7 @@ describe("saveProject / loadProject", () => {
     const storage = new MemoryStorage();
     const project = createEmptyProject("Моя игра");
     const second = addMap(project, "second", 1);
-    second.layers[0]!.tiles[3] = 999;
+    second.layers[0]!.tiles[3] = 70000;
     const err = await rejected(saveProject(storage, project));
     expect(err.code).toBe("invalid_map");
     expect(err.message).toContain("maps/second.json");
@@ -311,7 +312,7 @@ describe("map serialization", () => {
 
   it("several layers and a 1-wide map", () => {
     const map: GameMap = {
-      schemaVersion: 1, id: "thin", name: "Узкая", viewMode: "topdown", width: 1, height: 3, tileSize: 16,
+      schemaVersion: 2, id: "thin", name: "Узкая", viewMode: "topdown", width: 1, height: 3, tileSize: 16, objects: [],
       layers: [
         { id: "a", name: "A", visible: true, tiles: [1, 2, 3] },
         { id: "b", name: "B", visible: false, tiles: [4, 5, 6], extra: "__nestst_tiles__" },
@@ -334,7 +335,7 @@ describe("map serialization", () => {
   it("2048×2048 map stays well under 40 MB", { timeout: 60_000 }, () => {
     const size = 2048;
     const map: GameMap = {
-      schemaVersion: 1, id: "big", name: "Big", viewMode: "topdown", width: size, height: size, tileSize: 32,
+      schemaVersion: 2, id: "big", name: "Big", viewMode: "topdown", width: size, height: size, tileSize: 32, objects: [],
       layers: [{ id: "ground", name: "Ground", visible: true, tiles: new Array<number>(size * size).fill(0) }],
     };
     const text = serializeMap(map);

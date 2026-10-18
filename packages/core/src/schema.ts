@@ -2,9 +2,11 @@ import { z } from "zod";
 import { NestError, describeFirstIssue, messageForIssue } from "./errors.js";
 
 /** Current format version of each file kind. */
-export const FORMAT_VERSIONS = { manifest: 1, map: 1 } as const;
+export const FORMAT_VERSIONS = { manifest: 2, map: 2 } as const;
 export type FormatKind = keyof typeof FORMAT_VERSIONS;
-export const MAX_TILE_ID = 255;
+export const MAX_TILE_ID = 65535;
+/** Tiles in the built-in tileset and palette (ids 1..255; 0 is empty). */
+export const BUILTIN_TILE_COUNT = 255;
 export const MAX_MAP_SIZE = 2048;
 export const MAX_LAYERS = 16;
 
@@ -70,6 +72,14 @@ export const tileLayerSchema = z.looseObject({
   tiles: tilesSchema,
 });
 
+export const mapObjectSchema = z.looseObject({
+  id: idSchema,
+  kind: z.string(),
+  x: intRange(0, MAX_MAP_SIZE),
+  y: intRange(0, MAX_MAP_SIZE),
+  props: z.record(z.string(), z.unknown()),
+});
+
 export const gameMapSchema = z.looseObject({
   schemaVersion: schemaVersionSchema("map"),
   id: idSchema,
@@ -84,6 +94,7 @@ export const gameMapSchema = z.looseObject({
   height: intRange(1, MAX_MAP_SIZE),
   tileSize: intRange(1, 256),
   layers: z.array(tileLayerSchema).min(1).max(MAX_LAYERS),
+  objects: z.array(mapObjectSchema),
 });
 
 export const manifestMapEntrySchema = z.looseObject({
@@ -104,6 +115,7 @@ export const projectManifestSchema = z.looseObject({
 });
 
 export type TileLayer = z.infer<typeof tileLayerSchema>;
+export type MapObject = z.infer<typeof mapObjectSchema>;
 export type GameMap = z.infer<typeof gameMapSchema>;
 export type ProjectManifest = z.infer<typeof projectManifestSchema>;
 
@@ -163,6 +175,20 @@ export function parseMap(raw: unknown, file?: string): GameMap {
       throw new NestError(
         "invalid_map",
         `${where}: layer size of "${layer.name}" (${layer.tiles.length} tiles) does not match width × height (${map.width} × ${map.height} = ${expected})`,
+        file,
+      );
+    }
+  }
+  const objectIds = new Set<string>();
+  for (const obj of map.objects) {
+    if (objectIds.has(obj.id)) {
+      throw new NestError("invalid_map", `${where}: object id "${obj.id}" is used more than once`, file);
+    }
+    objectIds.add(obj.id);
+    if (obj.x >= map.width || obj.y >= map.height) {
+      throw new NestError(
+        "invalid_map",
+        `${where}: object "${obj.id}" at (${obj.x}, ${obj.y}) is outside the map (${map.width} × ${map.height})`,
         file,
       );
     }

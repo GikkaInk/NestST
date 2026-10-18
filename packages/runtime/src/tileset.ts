@@ -1,4 +1,4 @@
-import { MAX_TILE_ID } from "@nestst/core";
+import { BUILTIN_TILE_COUNT } from "@nestst/core";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import type { Renderer } from "pixi.js";
 
@@ -94,7 +94,7 @@ export function createBuiltinTileset(
   const side = cell * GRID;
   const data = new Uint8Array(side * side * 4);
   const border = cell >= 8 ? 1 : 0;
-  for (let id = 1; id <= MAX_TILE_ID; id++) {
+  for (let id = 1; id <= BUILTIN_TILE_COUNT; id++) {
     const [r, g, b] = builtinTileColor(id);
     const edge: [number, number, number] = [r * 0.7, g * 0.7, b * 0.7].map(Math.round) as [
       number,
@@ -120,7 +120,7 @@ export function createBuiltinTileset(
       frame: new Rectangle((c % GRID) * cell, Math.floor(c / GRID) * cell, cell, cell),
     });
   const textures: Texture[] = [];
-  for (let id = 1; id <= MAX_TILE_ID; id++) textures.push(frame(id - 1));
+  for (let id = 1; id <= BUILTIN_TILE_COUNT; id++) textures.push(frame(id - 1));
   return Object.assign(textures, { placeholder: frame(PLACEHOLDER_CELL) });
 }
 

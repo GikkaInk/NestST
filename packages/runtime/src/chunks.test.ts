@@ -217,7 +217,8 @@ describe("chunksToEvict", () => {
 function makeMap(over: Partial<GameMap> = {}): GameMap {
   const n = 4 * 3;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    objects: [],
     id: "m",
     name: "M",
     viewMode: "topdown",

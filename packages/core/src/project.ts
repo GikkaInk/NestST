@@ -51,6 +51,7 @@ export function createEmptyProject(name: string): Project {
         tiles: new Array<number>(DEFAULT_MAP_WIDTH * DEFAULT_MAP_HEIGHT).fill(0),
       },
     ],
+    objects: [],
   };
   const manifest: ProjectManifest = {
     schemaVersion: FORMAT_VERSIONS.manifest,

@@ -39,7 +39,8 @@ function fakeApp(width = 1280, height = 720) {
 function makeMap(width: number, height: number, layers = 2): GameMap {
   const n = width * height;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    objects: [],
     id: "m",
     name: "M",
     viewMode: "topdown",

@@ -1,7 +1,7 @@
 import {
   History,
   MANIFEST_FILE,
-  MAX_TILE_ID,
+  BUILTIN_TILE_COUNT,
   createEmptyProject,
   loadProject,
   paintCommand,
@@ -329,7 +329,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     },
 
     selectTile(tile) {
-      if (!Number.isInteger(tile) || tile < 1 || tile > MAX_TILE_ID) return;
+      if (!Number.isInteger(tile) || tile < 1 || tile > BUILTIN_TILE_COUNT) return;
       set({ selectedTile: tile, tool: "brush" });
     },
 

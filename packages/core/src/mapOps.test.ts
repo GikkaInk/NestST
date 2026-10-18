@@ -4,7 +4,7 @@ import type { GameMap, Project, TileEdit } from "./index.js";
 
 function makeMap(): GameMap {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "town",
     name: "Город",
     viewMode: "topdown",
@@ -12,6 +12,7 @@ function makeMap(): GameMap {
     height: 3,
     tileSize: 16,
     extra: { keep: "me" },
+    objects: [],
     layers: [
       { id: "ground", name: "Земля", visible: true, tiles: new Array<number>(12).fill(1), note: "x" },
       { id: "deco", name: "Декор", visible: false, tiles: new Array<number>(12).fill(0) },
@@ -88,7 +89,7 @@ describe("paintTiles", () => {
     ["x = 1.5", { x: 1.5, y: 0, tile: 1 }],
     ["x = NaN", { x: Number.NaN, y: 0, tile: 1 }],
     ["y = Infinity", { x: 0, y: Number.POSITIVE_INFINITY, tile: 1 }],
-    ["tile = 256", { x: 0, y: 0, tile: 256 }],
+    ["tile = 65536", { x: 0, y: 0, tile: 65536 }],
     ["tile = -1", { x: 0, y: 0, tile: -1 }],
     ["tile = 2.5", { x: 0, y: 0, tile: 2.5 }],
   ])("rejects %s with invalid_edit and leaves the map unchanged", (_label, cell) => {
@@ -107,7 +108,7 @@ describe("paintTiles", () => {
     const map = makeMap();
     const err = editError(map, [
       { layerId: "ground", x: 0, y: 0, tile: 9 },
-      { layerId: "ground", x: 0, y: 0, tile: 300 },
+      { layerId: "ground", x: 0, y: 0, tile: 70000 },
     ]);
     expect(err.message).toMatch(/edit 1/);
     expect(map.layers[0]!.tiles[0]).toBe(1);

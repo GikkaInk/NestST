@@ -44,8 +44,11 @@ function v0Manifest(): Record<string, unknown> {
 }
 
 describe("migrateRaw", () => {
-  it("MIGRATIONS is empty in M1", () => {
-    expect(MIGRATIONS).toEqual([]);
+  it("MIGRATIONS has one 1 to 2 step per kind", () => {
+    expect(MIGRATIONS.map((s) => [s.kind, s.from, s.to])).toEqual([
+      ["manifest", 1, 2],
+      ["map", 1, 2],
+    ]);
   });
 
   it("works on a copy: in-place mutating step does not touch the input", () => {
@@ -54,29 +57,29 @@ describe("migrateRaw", () => {
     const mutating: MigrationStep = {
       kind: "map",
       from: 0,
-      to: 1,
+      to: 2,
       run: (r) => {
         (r.extra as { a: number[] }).a.push(2);
-        r.schemaVersion = 1;
+        r.schemaVersion = 2;
         r.name = "changed";
         return r;
       },
     };
     const out = migrateRaw("map", input, [mutating]) as Record<string, unknown>;
     expect(input).toEqual(before);
-    expect(out).toEqual({ schemaVersion: 1, name: "changed", extra: { a: [1, 2] } });
+    expect(out).toEqual({ schemaVersion: 2, name: "changed", extra: { a: [1, 2] } });
     expect(out).not.toBe(input);
   });
 
   it("v0 map -> fake step -> parseMap succeeds, unknown key survives", () => {
-    const out = parseMap(migrateRaw("map", v0Map(), [step(0, 1)]));
-    expect(out.schemaVersion).toBe(1);
+    const out = parseMap(migrateRaw("map", v0Map(), [step(0, 1), ...MIGRATIONS]));
+    expect(out.schemaVersion).toBe(2);
     expect(out.unknownKey).toEqual({ я: [1] });
   });
 
   it("v0 manifest -> fake step -> parseManifest succeeds, unknown key survives", () => {
-    const out = parseManifest(migrateRaw("manifest", v0Manifest(), [step(0, 1, "manifest")]));
-    expect(out.schemaVersion).toBe(1);
+    const out = parseManifest(migrateRaw("manifest", v0Manifest(), [step(0, 1, "manifest"), ...MIGRATIONS]));
+    expect(out.schemaVersion).toBe(2);
     expect(out.futureKey).toBe("x");
   });
 
@@ -94,19 +97,19 @@ describe("migrateRaw", () => {
   });
 
   it("current version is returned unchanged, no steps run", () => {
-    const input = { schemaVersion: 1, name: "x" };
+    const input = { schemaVersion: 2, name: "x" };
     let called = false;
-    const spy: MigrationStep = { kind: "map", from: 1, to: 2, run: (r) => ((called = true), r) };
+    const spy: MigrationStep = { kind: "map", from: 2, to: 3, run: (r) => ((called = true), r) };
     expect(migrateRaw("map", input, [spy])).toEqual(input);
     expect(called).toBe(false);
   });
 
   it("newer version -> schema_too_new, input untouched", () => {
-    const input = { schemaVersion: 2, name: "Город" };
+    const input = { schemaVersion: 3, name: "Город" };
     const copy = structuredClone(input);
     const err = thrown(() => migrateRaw("map", input));
     expect(err.code).toBe("schema_too_new");
-    expect(err.message).toContain("format version 2");
+    expect(err.message).toContain("format version 3");
     expect(err.message).toContain("update NestST");
     expect(input).toEqual(copy);
   });
@@ -155,16 +158,16 @@ describe("migrateRaw", () => {
   });
 
   it("step beyond the current version -> migration_invalid", () => {
-    const err = thrown(() => migrateRaw("map", { schemaVersion: 0 }, [step(0, 2)]));
+    const err = thrown(() => migrateRaw("map", { schemaVersion: 0 }, [step(0, 3)]));
     expect(err.code).toBe("migration_invalid");
-    expect(err.message).toContain("from format version 0 to 2");
+    expect(err.message).toContain("from format version 0 to 3");
   });
 
   it("duplicate steps with same kind and from -> migration_invalid; other kind is fine", () => {
-    const err = thrown(() => migrateRaw("map", { schemaVersion: 0 }, [step(0, 1), step(0, 1)]));
+    const err = thrown(() => migrateRaw("map", { schemaVersion: 0 }, [step(0, 2), step(0, 2)]));
     expect(err.code).toBe("migration_invalid");
-    expect(migrateRaw("map", { schemaVersion: 0 }, [step(0, 1), step(0, 1, "manifest")])).toEqual({
-      schemaVersion: 1,
+    expect(migrateRaw("map", { schemaVersion: 0 }, [step(0, 2), step(0, 1, "manifest")])).toEqual({
+      schemaVersion: 2,
     });
   });
 

@@ -5,13 +5,14 @@ const ENGLISH = /Invalid input|expected|received|Too small|Too big|Required|unde
 
 function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "town",
     name: "Город",
     viewMode: "topdown",
     width: 4,
     height: 3,
     tileSize: 16,
+    objects: [],
     layers: [
       { id: "ground", name: "Земля", visible: true, tiles: new Array(12).fill(1) },
       { id: "deco", name: "Декор", visible: false, tiles: new Array(12).fill(0) },
@@ -22,7 +23,7 @@ function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function validManifest(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     name: "Моя игра",
     resolution: { width: 640, height: 360 },
     tileSize: 16,
@@ -77,11 +78,11 @@ describe("parseMap", () => {
     expect(err.message).toBe('in map "Город", field width: must be a whole number from 1 to 2048');
   });
 
-  it.each([256, -1, 2.5])("tile id %s is rejected", (t) => {
+  it.each([65536, -1, 2.5])("tile id %s is rejected", (t) => {
     const layers = [{ id: "g", name: "З", visible: true, tiles: [0, 0, t, ...new Array(9).fill(0)] }];
     const err = mapError(validMap({ layers }));
     expect(err.message).toContain("layers[0].tiles[2]");
-    expect(err.message).toContain("from 0 to 255");
+    expect(err.message).toContain("from 0 to 65535");
   });
 
   it("viewMode sideview is rejected", () => {
@@ -133,10 +134,10 @@ describe("parseMap", () => {
   });
 
   it("schemaVersion: wrong versions", () => {
-    expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("format version must be 1");
-    const err = mapError(validMap({ schemaVersion: 2 }), "maps/town.json");
+    expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("format version must be 2");
+    const err = mapError(validMap({ schemaVersion: 1 }), "maps/town.json");
     expect(err.code).toBe("invalid_map");
-    expect(err.message).toContain("format version must be 1");
+    expect(err.message).toContain("format version must be 2");
     expect(err.file).toBe("maps/town.json");
   });
 
@@ -226,17 +227,17 @@ describe("parseMap on huge maps", () => {
   }
 
   it("rejects a 2048×2048 layer full of invalid tiles with a NestError, quickly", () => {
-    const raw = hugeMap(999);
+    const raw = hugeMap(99999);
     const started = performance.now();
     const err = mapError(raw, "maps/town.json");
     expect(performance.now() - started).toBeLessThan(2000);
     expect(err.code).toBe("invalid_map");
     expect(err.message).toMatch(/layers\[0\]\.tiles\[0\]/);
-    expect(err.message).toMatch(/from 0 to 255/);
+    expect(err.message).toMatch(/from 0 to 65535/);
   });
 
   it("rejects three such layers with a NestError", () => {
-    const err = mapError(hugeMap(999, 3));
+    const err = mapError(hugeMap(99999, 3));
     expect(err.code).toBe("invalid_map");
   });
 
@@ -245,7 +246,7 @@ describe("parseMap on huge maps", () => {
     const tiles = (raw.layers as Array<{ tiles: unknown[] }>)[0]!.tiles;
     tiles[5000] = "x";
     tiles[6000] = 1.5;
-    expect(mapError(raw).message).toMatch(/layers\[0\]\.tiles\[5000\]: must be a whole number from 0 to 255/);
+    expect(mapError(raw).message).toMatch(/layers\[0\]\.tiles\[5000\]: must be a whole number from 0 to 65535/);
   });
 
   it("still parses a valid 2048×2048×3 map fast", () => {

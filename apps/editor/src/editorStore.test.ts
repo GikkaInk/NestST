@@ -191,7 +191,7 @@ describe("paintStroke, undo and redo", () => {
     const before = store.getState().project;
     expect(store.paintStroke([ground(-1, 0, 2)])).toBe(false);
     expect(store.paintStroke([ground(0.5, 0, 2)])).toBe(false);
-    expect(store.paintStroke([ground(0, 0, 256)])).toBe(false);
+    expect(store.paintStroke([ground(0, 0, 65536)])).toBe(false);
     expect(store.getState().project).toBe(before);
   });
 
