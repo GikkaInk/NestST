@@ -209,3 +209,51 @@ describe("parseManifest", () => {
     expect(manifestError(validManifest({ name: "" })).message).toContain("field name");
   });
 });
+
+describe("parseMap on huge maps", () => {
+  function hugeMap(fill: number, layers = 1): Record<string, unknown> {
+    const size = 2048;
+    return validMap({
+      width: size,
+      height: size,
+      layers: Array.from({ length: layers }, (_, i) => ({
+        id: `l${i}`,
+        name: `Слой ${i}`,
+        visible: true,
+        tiles: new Array(size * size).fill(fill),
+      })),
+    });
+  }
+
+  it("rejects a 2048×2048 layer full of invalid tiles with a NestError, quickly", () => {
+    const raw = hugeMap(999);
+    const started = performance.now();
+    const err = mapError(raw, "maps/town.json");
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(err.code).toBe("invalid_map");
+    expect(err.message).toMatch(/layers\[0\]\.tiles\[0\]/);
+    expect(err.message).toMatch(/from 0 to 255/);
+  });
+
+  it("rejects three such layers with a NestError", () => {
+    const err = mapError(hugeMap(999, 3));
+    expect(err.code).toBe("invalid_map");
+  });
+
+  it("reports the first bad tile of a large layer", () => {
+    const raw = hugeMap(1);
+    const tiles = (raw.layers as Array<{ tiles: unknown[] }>)[0]!.tiles;
+    tiles[5000] = "x";
+    tiles[6000] = 1.5;
+    expect(mapError(raw).message).toMatch(/layers\[0\]\.tiles\[5000\]: must be a whole number from 0 to 255/);
+  });
+
+  it("still parses a valid 2048×2048×3 map fast", () => {
+    const raw = hugeMap(7, 3);
+    const started = performance.now();
+    const map = parseMap(raw);
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(map.layers).toHaveLength(3);
+    expect(map.layers[2]!.tiles[2048 * 2048 - 1]).toBe(7);
+  });
+});

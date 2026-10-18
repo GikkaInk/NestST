@@ -13,3 +13,6 @@ export type { MigrationStep } from "./migrate.js";
 export type { ProjectStorage } from "./storage.js";
 export { MANIFEST_FILE, createEmptyProject, saveProject, loadProject } from "./project.js";
 export type { Project } from "./project.js";
+export { paintTiles, paintCommand, mergeCommands } from "./mapOps.js";
+export type { TileEdit, Command } from "./mapOps.js";
+export { History } from "./history.js";

@@ -35,11 +35,36 @@ const schemaVersionSchema = z.literal(CURRENT_SCHEMA_VERSION, {
       : `format version must be ${CURRENT_SCHEMA_VERSION}`,
 });
 
+const TILE_MESSAGE = `must be a whole number from 0 to ${MAX_TILE_ID}`;
+
+/**
+ * Tile list checked with a plain loop that stops at the first bad tile.
+ * `z.array(intRange(...))` collects one issue per bad item, which on a
+ * 2048×2048 layer is slow and can overflow the call stack.
+ */
+const tilesSchema = z
+  .custom<number[]>((v) => Array.isArray(v), { error: "must be a list" })
+  .check((ctx) => {
+    const tiles = ctx.value;
+    for (let i = 0; i < tiles.length; i++) {
+      const t = tiles[i];
+      if (!Number.isInteger(t) || t < 0 || t > MAX_TILE_ID) {
+        ctx.issues.push({
+          code: "custom",
+          input: t,
+          path: [i],
+          message: t === undefined ? "this field is missing" : TILE_MESSAGE,
+        });
+        return;
+      }
+    }
+  });
+
 export const tileLayerSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
   visible: z.boolean(),
-  tiles: z.array(intRange(0, MAX_TILE_ID)),
+  tiles: tilesSchema,
 });
 
 export const gameMapSchema = z.looseObject({
@@ -95,9 +120,30 @@ function mapLabel(raw: unknown): string {
   return "in map";
 }
 
+/**
+ * `safeParse` that never lets an engine error out: if the data is so damaged
+ * that validation itself runs out of stack, report it as a NestError.
+ */
+function safeParseGuarded<T extends z.ZodType>(
+  schema: T,
+  raw: unknown,
+  code: string,
+  where: string,
+  file: string | undefined,
+): ReturnType<T["safeParse"]> {
+  try {
+    return schema.safeParse(raw, { error: messageForIssue }) as ReturnType<T["safeParse"]>;
+  } catch (e) {
+    if (e instanceof RangeError) {
+      throw new NestError(code, `${where}: the data is too damaged to read`, file);
+    }
+    throw e;
+  }
+}
+
 export function parseMap(raw: unknown, file?: string): GameMap {
   const where = withFile(file, mapLabel(raw));
-  const res = gameMapSchema.safeParse(raw, { error: messageForIssue });
+  const res = safeParseGuarded(gameMapSchema, raw, "invalid_map", where, file);
   if (!res.success) {
     throw new NestError("invalid_map", describeFirstIssue(res.error, where), file);
   }
@@ -127,7 +173,7 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
       ? `in project "${raw.name}"`
       : "in project manifest";
   const where = withFile(file, label);
-  const res = projectManifestSchema.safeParse(raw, { error: messageForIssue });
+  const res = safeParseGuarded(projectManifestSchema, raw, "invalid_manifest", where, file);
   if (!res.success) {
     throw new NestError("invalid_manifest", describeFirstIssue(res.error, where), file);
   }
