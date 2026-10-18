@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { NestError, createEmptyProject, paintCommand, paintTiles, parseMap } from "./index.js";
+import { MemoryStorage } from "./testing.js";
+import { NestError, createEmptyProject, loadProject, migrateRaw, saveProject, paintCommand, paintTiles, parseMap } from "./index.js";
 
 function rawMap(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -79,9 +80,35 @@ describe("painting keeps objects", () => {
     const before = structuredClone(map.objects);
     const painted = paintTiles(map, [{ layerId: "ground", x: 0, y: 0, tile: 300 }]);
     expect(painted.objects).toEqual(before);
+    expect(painted.objects).toBe(map.objects);
     const cmd = paintCommand("town", [{ layerId: "ground", x: 1, y: 0, tile: 7 }], map);
     const project = { manifest: createEmptyProject("P").manifest, maps: { town: map } };
     expect(cmd.apply(project).maps.town!.objects).toEqual(before);
     expect(map.objects).toEqual(before);
+  });
+});
+
+describe("unknown object data survives", () => {
+  const chest = { id: "c1", kind: "chest", x: 1, y: 1, props: { gold: 5 }, tint: "red" };
+
+  it("round-trips through saveProject and loadProject", async () => {
+    const project = createEmptyProject("P");
+    project.maps.main = parseMap({ ...project.maps.main, objects: [chest] });
+    const storage = new MemoryStorage();
+    await saveProject(storage, project);
+    const loaded = await loadProject(storage);
+    expect(loaded.maps.main!.objects).toEqual([chest]);
+    expect(loaded).toEqual(project);
+  });
+
+  it("keeps unknown top-level keys through migration and parse", () => {
+    const v1 = { ...rawMap({ schemaVersion: 1, future: { a: [1] } }) };
+    delete v1.objects;
+    const migrated = migrateRaw("map", v1) as Record<string, unknown>;
+    const withObject = { ...migrated, objects: [chest] };
+    const map = parseMap(withObject);
+    expect(map.future).toEqual({ a: [1] });
+    expect(map.objects).toEqual([chest]);
+    expect(parseMap(migrated).future).toEqual({ a: [1] });
   });
 });

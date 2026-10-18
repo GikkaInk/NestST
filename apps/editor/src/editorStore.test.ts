@@ -373,7 +373,7 @@ describe("tools, tiles and errors", () => {
     const store = createEditorStore(fakeSession());
     store.selectTile(12);
     expect(store.getState().selectedTile).toBe(12);
-    for (const bad of [0, -3, 256, 1.5, Number.NaN]) {
+    for (const bad of [0, -3, 256, 65535, 1.5, Number.NaN]) {
       store.selectTile(bad);
       expect(store.getState().selectedTile).toBe(12);
     }
