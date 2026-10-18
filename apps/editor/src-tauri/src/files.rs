@@ -33,6 +33,20 @@ pub fn current_root(state: &ProjectRoot) -> Result<PathBuf, String> {
     .ok_or_else(|| "No project folder is open. Open or create a project first.".to_string())
 }
 
+/// Stores the picked folder (canonicalised) as the project root and returns
+/// it for display. On error the previous root stays.
+pub fn set_root(state: &ProjectRoot, folder: &Path) -> Result<String, String> {
+  let not_found = || format!("Project folder \"{}\" was not found", folder.display());
+  let canon = fs::canonicalize(folder).map_err(|_| not_found())?;
+  if !canon.is_dir() {
+    return Err(not_found());
+  }
+  let shown = canon.to_string_lossy().into_owned();
+  let mut guard = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+  *guard = Some(canon);
+  Ok(shown)
+}
+
 /// Plain English description of an I/O error. The OS text is not used: once
 /// GTK sets the locale it may come back translated.
 fn describe(e: &io::Error) -> String {
@@ -390,6 +404,34 @@ mod tests {
     assert!(err.contains("No project folder"), "{err}");
     *state.0.lock().unwrap() = Some(PathBuf::from("/tmp/x"));
     assert_eq!(current_root(&state).unwrap(), PathBuf::from("/tmp/x"));
+  }
+
+  #[test]
+  fn set_root_stores_canonical_target_of_symlinked_folder() {
+    let real = project();
+    let links = project();
+    let link = links.path().join("link to project");
+    symlink(real.path(), &link).unwrap();
+    let state = ProjectRoot::default();
+    let shown = set_root(&state, &link).unwrap();
+    let canon = fs::canonicalize(real.path()).unwrap();
+    assert_eq!(current_root(&state).unwrap(), canon);
+    assert_eq!(shown, canon.to_string_lossy());
+    // Retargeting the link later does not move the sandbox.
+    let other = project();
+    fs::remove_file(&link).unwrap();
+    symlink(other.path(), &link).unwrap();
+    assert_eq!(current_root(&state).unwrap(), canon);
+  }
+
+  #[test]
+  fn set_root_rejects_missing_folder_and_keeps_old_root() {
+    let dir = project();
+    let state = ProjectRoot::default();
+    set_root(&state, dir.path()).unwrap();
+    let err = set_root(&state, &dir.path().join("gone")).unwrap_err();
+    assert!(err.contains("Project folder"), "{err}");
+    assert_eq!(current_root(&state).unwrap(), fs::canonicalize(dir.path()).unwrap());
   }
 
   // ---- write_atomic ----

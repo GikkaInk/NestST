@@ -15,10 +15,7 @@ fn pick_root(app: &AppHandle, title: &str) -> Option<String> {
     .set_can_create_directories(true)
     .blocking_pick_folder()?;
   let path = picked.into_path().ok()?;
-  let state = app.state::<ProjectRoot>();
-  let mut root = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-  *root = Some(path.clone());
-  Some(path.to_string_lossy().into_owned())
+  files::set_root(&app.state::<ProjectRoot>(), &path).ok()
 }
 
 #[tauri::command]
