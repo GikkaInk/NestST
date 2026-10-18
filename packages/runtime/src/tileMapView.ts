@@ -21,14 +21,31 @@ const BUILD_MARGIN = 1;
 /** Chunks farther than this outside the screen are destroyed. */
 const KEEP_MARGIN = 2;
 
+/**
+ * Zoom limits. Zooming out is what makes drawing expensive (the number of
+ * sprites grows with 1 / scale²), so `setCamera` clamps the zoom to this range.
+ * At MIN_SCALE a 1280×720 screen builds at most 13×9 chunks per layer
+ * (about 30k sprites). Wider views need a level-of-detail mode (one sprite per chunk).
+ */
+export const MIN_SCALE = 0.5;
+export const MAX_SCALE = 8;
+
 export interface TileMapView {
   /** Holds one child container per map layer, in layer order. */
   container: Container;
   setMap(map: GameMap): void;
-  /** `x`, `y`: world pixel at the top-left of the screen; `scale`: zoom. */
+  /**
+   * `x`, `y`: world pixel at the top-left of the screen; `scale`: zoom, clamped
+   * to MIN_SCALE..MAX_SCALE. A non-finite or non-positive zoom keeps the
+   * previous zoom; a non-finite `x` or `y` keeps the previous position. Never throws.
+   */
   setCamera(x: number, y: number, scale: number): void;
   /** Frees the scene and the ticker callback. The tileset stays with the caller. */
   destroy(): void;
+}
+
+function clampScale(scale: number): number {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 }
 
 interface LayerView {
@@ -160,10 +177,11 @@ export function createTileMapView(app: Application, map: GameMap, tileset: Tiles
     },
     setCamera(x, y, scale) {
       if (destroyed) return;
-      if (!(scale > 0) || !Number.isFinite(scale) || !Number.isFinite(x) || !Number.isFinite(y)) {
-        throw new RangeError(`camera must use finite numbers and a positive zoom, got ${x}, ${y}, ${scale}`);
-      }
-      camera = { x, y, scale };
+      camera = {
+        x: Number.isFinite(x) ? x : camera.x,
+        y: Number.isFinite(y) ? y : camera.y,
+        scale: Number.isFinite(scale) && scale > 0 ? clampScale(scale) : camera.scale,
+      };
       update();
     },
     destroy() {

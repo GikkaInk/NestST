@@ -132,3 +132,24 @@ export function tileTexture(tileset: Tileset, id: number): Texture {
   }
   return tileset.placeholder ?? fallbackPlaceholder();
 }
+
+const destroyedTilesets = new WeakSet<object>();
+
+/**
+ * Frees a tileset: every texture in it, its own placeholder and each texture
+ * source (the shared atlas) exactly once. Safe to call again. The shared
+ * fallback placeholder used by `tileTexture` is never destroyed.
+ */
+export function destroyTileset(tileset: Tileset): void {
+  if (destroyedTilesets.has(tileset)) return;
+  destroyedTilesets.add(tileset);
+  const fallback = sharedPlaceholder;
+  const textures = tileset.placeholder ? [...tileset, tileset.placeholder] : [...tileset];
+  const sources = new Set<Texture["source"]>();
+  for (const t of textures) {
+    if (t === fallback) continue;
+    sources.add(t.source);
+    if (!t.destroyed) t.destroy(false);
+  }
+  for (const s of sources) if (!s.destroyed) s.destroy();
+}

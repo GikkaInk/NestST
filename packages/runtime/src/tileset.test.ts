@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_TILE_ID } from "@nestst/core";
 import type { Renderer, Texture } from "pixi.js";
-import { builtinTileColor, createBuiltinTileset, tileTexture } from "./tileset.js";
+import { builtinTileColor, createBuiltinTileset, destroyTileset, tileTexture } from "./tileset.js";
 
 // The built-in tileset is drawn into a CPU buffer, so no real renderer is needed.
 const renderer = {} as Renderer;
@@ -89,5 +89,26 @@ describe("tileTexture", () => {
     expect(p).toBeDefined();
     expect(small).not.toContain(p);
     expect(tileTexture([], 1)).toBe(p);
+  });
+});
+
+describe("destroyTileset", () => {
+  it("destroys every texture and the shared atlas once, and is safe to repeat", () => {
+    const set = createBuiltinTileset(renderer, 16);
+    const source = set[0]!.source;
+    destroyTileset(set);
+    expect(set.every((t) => t.destroyed)).toBe(true);
+    expect(set.placeholder.destroyed).toBe(true);
+    expect(source.destroyed).toBe(true);
+    expect(() => destroyTileset(set)).not.toThrow();
+  });
+
+  it("does not destroy the shared fallback placeholder", () => {
+    const small = createBuiltinTileset(renderer, 16).slice(0, 3);
+    const fallback = tileTexture(small, 99);
+    destroyTileset(small);
+    expect(small.every((t) => t.destroyed)).toBe(true);
+    expect(fallback.destroyed).toBe(false);
+    expect(tileTexture(small, 99)).toBe(fallback);
   });
 });

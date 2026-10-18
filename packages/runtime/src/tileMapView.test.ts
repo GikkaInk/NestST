@@ -3,7 +3,8 @@ import { paintTiles } from "@nestst/core";
 import type { GameMap } from "@nestst/core";
 import type { Application, Container, Renderer, Sprite } from "pixi.js";
 import { createBuiltinTileset, tileTexture } from "./tileset.js";
-import { createTileMapView } from "./tileMapView.js";
+import { MAX_SCALE, MIN_SCALE, createTileMapView } from "./tileMapView.js";
+import { CHUNK_SIZE } from "./chunks.js";
 
 /**
  * A stand-in for `Application`: the view only reads `screen` and uses `ticker`.
@@ -120,7 +121,130 @@ describe("createTileMapView", () => {
     expect(view.container.x).toBe(-200);
     expect(view.container.y).toBe(-100);
     expect(view.container.scale.x).toBe(2);
-    expect(() => view.setCamera(0, 0, 0)).toThrow(RangeError);
+    view.destroy();
+  });
+
+  it("clamps the zoom to MIN_SCALE..MAX_SCALE and ignores invalid values", () => {
+    const { app } = fakeApp();
+    const view = createTileMapView(app, makeMap(64, 64), tileset);
+    const scale = () => view.container.scale.x;
+    expect(MIN_SCALE).toBe(0.5);
+    expect(MAX_SCALE).toBe(8);
+    view.setCamera(0, 0, 0.1);
+    expect(scale()).toBe(MIN_SCALE);
+    view.setCamera(0, 0, 0.5);
+    expect(scale()).toBe(0.5);
+    view.setCamera(0, 0, 8);
+    expect(scale()).toBe(8);
+    view.setCamera(0, 0, 100);
+    expect(scale()).toBe(MAX_SCALE);
+    view.setCamera(0, 0, 2);
+    // Invalid zoom keeps the previous valid one instead of failing.
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      view.setCamera(10, 20, bad);
+      expect(scale()).toBe(2);
+      expect(view.container.x).toBe(-20);
+      expect(view.container.y).toBe(-40);
+    }
+    // Invalid position keeps the previous position.
+    view.setCamera(Number.NaN, Number.POSITIVE_INFINITY, 1);
+    expect(scale()).toBe(1);
+    expect(view.container.x).toBe(-10);
+    expect(view.container.y).toBe(-20);
+    view.destroy();
+  });
+
+  it("an invalid first zoom falls back to a valid one", () => {
+    const { app } = fakeApp();
+    const view = createTileMapView(app, makeMap(64, 64), tileset);
+    view.setCamera(0, 0, Number.NaN);
+    expect(view.container.scale.x).toBeGreaterThanOrEqual(MIN_SCALE);
+    expect(view.container.scale.x).toBeLessThanOrEqual(MAX_SCALE);
+    view.destroy();
+  });
+
+  it("pins the cost of the widest zoom: built sprites stay bounded", () => {
+    const W = 1280;
+    const H = 720;
+    const span = CHUNK_SIZE * 16 * MIN_SCALE; // screen pixels per chunk at minimum zoom
+    // Worst case: screen not aligned to chunks (+1 per axis), plus the hidden build ring (+2).
+    const maxChunks = (Math.ceil(W / span) + 3) * (Math.ceil(H / span) + 3);
+    const bound = maxChunks * CHUNK_SIZE * CHUNK_SIZE;
+    expect(bound).toBeLessThanOrEqual(30_000);
+    const { app } = fakeApp(W, H);
+    let max = 0;
+    for (const [x, y] of [
+      [0, 0],
+      [5000, 5000],
+      [5100, 4950],
+      [9000, 2000],
+    ] as const) {
+      // Fresh view per position so leftovers from earlier cameras do not count.
+      const v = createTileMapView(app, makeMap(1000, 1000, 1), tileset);
+      v.setCamera(x, y, 0.01);
+      expect(v.container.scale.x).toBe(MIN_SCALE);
+      const n = (v.container.children[0] as Container).children.reduce(
+        (s, c) => s + (c as Container).children.length,
+        0,
+      );
+      max = Math.max(max, n);
+      v.destroy();
+    }
+    expect(max).toBeGreaterThan(0);
+    expect(max).toBeLessThanOrEqual(bound);
+  });
+
+  it("setMap with an added layer rebuilds with one container per layer", () => {
+    const { app } = fakeApp();
+    const map = makeMap(64, 64, 2);
+    const view = createTileMapView(app, map, tileset);
+    const extra = makeMap(64, 64, 3).layers[2]!;
+    view.setMap({ ...map, layers: [...map.layers, extra] });
+    expect(view.container.children.map((c) => c.label)).toEqual(["l0", "l1", "l2"]);
+    expect(layerContainer(view, 2).children.length).toBeGreaterThan(0);
+    view.destroy();
+  });
+
+  it("setMap with a renamed layer id rebuilds that layer under the new id", () => {
+    const { app } = fakeApp();
+    const map = makeMap(64, 64, 2);
+    const view = createTileMapView(app, map, tileset);
+    const old = layerContainer(view, 1);
+    view.setMap({ ...map, layers: [map.layers[0]!, { ...map.layers[1]!, id: "renamed" }] });
+    expect(old.destroyed).toBe(true);
+    expect(view.container.children.map((c) => c.label)).toEqual(["l0", "renamed"]);
+    view.destroy();
+  });
+
+  it("setMap with a new tile size redraws chunks at the new size", () => {
+    const { app } = fakeApp(512, 512);
+    const map = makeMap(64, 64, 1);
+    const view = createTileMapView(app, map, tileset);
+    view.setMap({ ...map, tileSize: 32 });
+    const c = chunks(view, 0).get("1,0")!;
+    expect(c.x).toBe(16 * 32);
+    const s = c.children[0] as Sprite;
+    expect(s.width).toBe(32);
+    expect(s.height).toBe(32);
+    // 512 px screen now shows exactly one 512 px chunk.
+    expect(visibleLabels(view, 0)).toEqual(["0,0"]);
+    view.destroy();
+  });
+
+  it("a cell painted outside the cached chunks shows up after panning to it", () => {
+    const { app } = fakeApp(256, 256);
+    const map = makeMap(200, 200, 1);
+    const view = createTileMapView(app, map, tileset);
+    expect(chunks(view, 0).has("10,10")).toBe(false);
+    const x = 10 * 16 + 5;
+    const y = 10 * 16 + 7;
+    const next = paintTiles(map, [{ layerId: "l0", x, y, tile: 200 }]);
+    view.setMap(next);
+    view.setCamera(10 * 256, 10 * 256, 1);
+    const chunk = chunks(view, 0).get("10,10")!;
+    expect(chunk.visible).toBe(true);
+    const sprite = chunk.children.find((s) => s.x === 5 * 16 && s.y === 7 * 16) as Sprite;
+    expect(sprite.texture).toBe(tileTexture(tileset, 200));
     view.destroy();
   });
 
@@ -147,13 +271,13 @@ describe("createTileMapView", () => {
     view.destroy();
   });
 
-  it("zoomed out to 0.25 still draws only what is needed", () => {
+  it("zoomed out to the minimum still draws only what is needed", () => {
     const { app } = fakeApp(1280, 720);
     const view = createTileMapView(app, makeMap(1000, 1000, 1), tileset);
-    view.setCamera(0, 0, 0.25);
-    // visible 20×12 chunks, built with margin 1 at the map corner → 21×13.
-    expect(visibleLabels(view, 0)).toHaveLength(20 * 12);
-    expect(layerContainer(view, 0).children).toHaveLength(21 * 13);
+    view.setCamera(0, 0, 0.25); // clamped to MIN_SCALE = 0.5
+    // 2560×1440 world px → visible 10×6 chunks, built with margin 1 at the corner → 11×7.
+    expect(visibleLabels(view, 0)).toHaveLength(10 * 6);
+    expect(layerContainer(view, 0).children).toHaveLength(11 * 7);
     view.destroy();
   });
 
