@@ -441,6 +441,94 @@ describe("NodeFsStorage", () => {
   });
 });
 
+describe("migration backup", () => {
+  const v1MapText = `${JSON.stringify({
+    schemaVersion: 1,
+    id: "main",
+    name: "Main",
+    viewMode: "topdown",
+    width: 2,
+    height: 1,
+    tileSize: 16,
+    layers: [{ id: "ground", name: "Ground", visible: true, tiles: [1, 2] }],
+  })}\r\n`;
+  const v1ManifestText = `{"schemaVersion":1,"name":"Game","resolution":{"width":1280,"height":720},"tileSize":16,"maps":[{"id":"main","file":"maps/main.json"}],"startMapId":"main"}`;
+  const v2MapText = serializeMap(createEmptyProject("X").maps.main!);
+  const v2ManifestText = `${JSON.stringify(createEmptyProject("X").manifest, null, 2)}\n`;
+  const NOW = new Date("2026-10-19T12:34:56Z");
+  const DIR = ".nestst-backup/20261019-123456";
+
+  it("reports both files of a v1 project byte-for-byte", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v1ManifestText,
+      "maps/main.json": v1MapText,
+    });
+    const project = await loadProject(storage);
+    expect(project.migratedFrom).toHaveLength(2);
+    expect(project.migratedFrom).toContainEqual({ path: MANIFEST_FILE, text: v1ManifestText });
+    expect(project.migratedFrom).toContainEqual({ path: "maps/main.json", text: v1MapText });
+  });
+
+  it("gives an empty migratedFrom for a v2 project", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v2ManifestText,
+      "maps/main.json": v2MapText,
+    });
+    expect((await loadProject(storage)).migratedFrom ?? []).toEqual([]);
+  });
+
+  it("reports only the migrated file in a mixed project", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v1ManifestText.replace('"tileSize":16', '"tileSize":32'),
+      "maps/main.json": v2MapText,
+    });
+    const project = await loadProject(storage);
+    expect(project.migratedFrom).toHaveLength(1);
+    expect(project.migratedFrom![0]!.path).toBe(MANIFEST_FILE);
+  });
+
+  it("writes backup files before the main files", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v1ManifestText,
+      "maps/main.json": v1MapText,
+    });
+    const project = await loadProject(storage);
+    storage.writeLog.length = 0;
+    await saveProject(storage, project, { backup: project.migratedFrom!, now: NOW });
+    expect(storage.writeLog.slice(0, 2).sort()).toEqual(
+      [`${DIR}/maps/main.json`, `${DIR}/${MANIFEST_FILE}`].sort(),
+    );
+    expect(storage.writeLog.slice(2)).toEqual(["maps/main.json", MANIFEST_FILE]);
+    expect(storage.files.get(`${DIR}/maps/main.json`)).toBe(v1MapText);
+    expect(storage.files.get(`${DIR}/${MANIFEST_FILE}`)).toBe(v1ManifestText);
+  });
+
+  it("keeps main files and throws save_failed when a backup write fails", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v1ManifestText,
+      "maps/main.json": v1MapText,
+    });
+    const project = await loadProject(storage);
+    storage.failOnWrite(1);
+    const err = await rejected(
+      saveProject(storage, project, { backup: project.migratedFrom!, now: NOW }),
+    );
+    expect(err.code).toBe("save_failed");
+    expect(storage.files.get(MANIFEST_FILE)).toBe(v1ManifestText);
+    expect(storage.files.get("maps/main.json")).toBe(v1MapText);
+  });
+
+  it("writes no backup paths without the backup option", async () => {
+    const storage = new MemoryStorage({
+      [MANIFEST_FILE]: v1ManifestText,
+      "maps/main.json": v1MapText,
+    });
+    const project = await loadProject(storage);
+    await saveProject(storage, project);
+    expect(storage.writeLog.some((p) => p.includes(".nestst-backup"))).toBe(false);
+  });
+});
+
 describe("package boundaries", () => {
   it("core index does not expose test storages", () => {
     expect("MemoryStorage" in core).toBe(false);

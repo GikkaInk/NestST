@@ -13,10 +13,36 @@ const DEFAULT_MAP_WIDTH = 32;
 const DEFAULT_MAP_HEIGHT = 24;
 const DEFAULT_TILE_SIZE = 32;
 
+/** Folder (at the project root) that holds pre-migration backups. */
+export const BACKUP_DIR = ".nestst-backup";
+
+/** A file's path and its original text. */
+export interface BackupFile {
+  path: string;
+  text: string;
+}
+
 export interface Project {
   manifest: ProjectManifest;
   /** Maps by id; every manifest entry has exactly one map here and vice versa. */
   maps: Record<string, GameMap>;
+  /** Original text of the files that were migrated on load; absent when none were. */
+  migratedFrom?: BackupFile[];
+}
+
+export interface SaveOptions {
+  /** Files to copy into `.nestst-backup/<timestamp>/` before anything else is written. */
+  backup?: readonly BackupFile[];
+  /** Time used for the backup folder name; defaults to now. */
+  now?: Date;
+}
+
+function backupStamp(d: Date): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return (
+    `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-` +
+    `${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`
+  );
 }
 
 function errorText(e: unknown): string {
@@ -112,7 +138,11 @@ export function serializeMap(map: GameMap): string {
  * interrupted save can leave the OLD manifest next to some NEW maps; each map
  * file is self-contained, so such a mix still loads without errors.
  */
-export async function saveProject(storage: ProjectStorage, project: Project): Promise<void> {
+export async function saveProject(
+  storage: ProjectStorage,
+  project: Project,
+  options?: SaveOptions,
+): Promise<void> {
   const manifest = parseManifest(project.manifest, MANIFEST_FILE);
   const listed = new Set(manifest.maps.map((e) => e.id));
   for (const key of Object.keys(project.maps)) {
@@ -146,6 +176,11 @@ export async function saveProject(storage: ProjectStorage, project: Project): Pr
   }
   files.push({ path: MANIFEST_FILE, text: serialize(manifest) });
 
+  if (options?.backup && options.backup.length > 0) {
+    const dir = `${BACKUP_DIR}/${backupStamp(options.now ?? new Date())}`;
+    files.unshift(...options.backup.map((b) => ({ path: `${dir}/${b.path}`, text: b.text })));
+  }
+
   for (const { path, text } of files) {
     try {
       await storage.writeAtomic(path, text);
@@ -158,7 +193,11 @@ export async function saveProject(storage: ProjectStorage, project: Project): Pr
   }
 }
 
-async function readJson(storage: ProjectStorage, path: string, missing: string): Promise<unknown> {
+async function readJson(
+  storage: ProjectStorage,
+  path: string,
+  missing: string,
+): Promise<{ text: string; json: unknown }> {
   let exists: boolean;
   try {
     exists = await storage.exists(path);
@@ -176,7 +215,7 @@ async function readJson(storage: ProjectStorage, path: string, missing: string):
     throw new NestError("empty_file", `file ${path} is empty`, path);
   }
   try {
-    return JSON.parse(text) as unknown;
+    return { text, json: JSON.parse(text) as unknown };
   } catch (e) {
     throw new NestError(
       "invalid_json",
@@ -188,15 +227,21 @@ async function readJson(storage: ProjectStorage, path: string, missing: string):
 
 /** Reads the manifest, then every map; each file goes through `migrateRaw` and its parser. */
 export async function loadProject(storage: ProjectStorage): Promise<Project> {
+  const migratedFrom: BackupFile[] = [];
+  const noteIfMigrated = (kind: "manifest" | "map", path: string, r: { text: string; json: unknown }) => {
+    const v = (r.json as { schemaVersion?: unknown } | null)?.schemaVersion;
+    if (typeof v === "number" && v < FORMAT_VERSIONS[kind]) migratedFrom.push({ path, text: r.text });
+  };
   const rawManifest = await readJson(
     storage,
     MANIFEST_FILE,
     `file ${MANIFEST_FILE} was not found; this folder is not a NestST project`,
   );
   const manifest = parseManifest(
-    migrateRaw("manifest", rawManifest, undefined, MANIFEST_FILE),
+    migrateRaw("manifest", rawManifest.json, undefined, MANIFEST_FILE),
     MANIFEST_FILE,
   );
+  noteIfMigrated("manifest", MANIFEST_FILE, rawManifest);
   const maps: Record<string, GameMap> = {};
   for (const entry of manifest.maps) {
     const raw = await readJson(
@@ -204,7 +249,7 @@ export async function loadProject(storage: ProjectStorage): Promise<Project> {
       entry.file,
       `file ${entry.file} was not found, but ${MANIFEST_FILE} lists it for map "${entry.id}"`,
     );
-    const map = parseMap(migrateRaw("map", raw, undefined, entry.file), entry.file);
+    const map = parseMap(migrateRaw("map", raw.json, undefined, entry.file), entry.file);
     if (map.id !== entry.id) {
       throw new NestError(
         "invalid_map",
@@ -212,7 +257,8 @@ export async function loadProject(storage: ProjectStorage): Promise<Project> {
         entry.file,
       );
     }
+    noteIfMigrated("map", entry.file, raw);
     maps[entry.id] = map;
   }
-  return { manifest, maps };
+  return migratedFrom.length > 0 ? { manifest, maps, migratedFrom } : { manifest, maps };
 }
