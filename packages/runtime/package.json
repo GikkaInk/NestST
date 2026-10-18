@@ -3,12 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "license": "MIT",
   "scripts": {
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@nestst/core": "workspace:*"
+    "@nestst/core": "workspace:*",
+    "pixi.js": "^8.22.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

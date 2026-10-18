@@ -45,6 +45,9 @@ importers:
       '@nestst/core':
         specifier: workspace:*
         version: link:../core
+      pixi.js:
+        specifier: ^8.22.0
+        version: 8.22.0
     devDependencies:
       typescript:
         specifier: ^7.0.2
