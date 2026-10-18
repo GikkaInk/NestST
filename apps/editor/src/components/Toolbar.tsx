@@ -1,0 +1,130 @@
+import type { ReactNode } from "react";
+import type { EditorStore, Tool } from "../editorStore.js";
+import { useEditorState } from "../useEditorState.js";
+import {
+  IconBrush,
+  IconEraser,
+  IconFit,
+  IconNew,
+  IconOpen,
+  IconRedo,
+  IconSave,
+  IconUndo,
+  IconZoomIn,
+  IconZoomOut,
+} from "./icons.js";
+
+export interface ZoomControls {
+  zoomIn(): void;
+  zoomOut(): void;
+  fit(): void;
+}
+
+interface Props {
+  store: EditorStore;
+  /** Zoom of the map view, 1 = 100 %. */
+  zoom: number;
+  zoomControls: ZoomControls | null;
+  onNew(): void;
+  onOpen(): void;
+}
+
+function ToolButton(props: {
+  label: string;
+  shortcut?: string;
+  onClick(): void;
+  disabled?: boolean;
+  pressed?: boolean;
+  className?: string;
+  children: ReactNode;
+  showLabel?: boolean;
+}) {
+  const tip = props.shortcut ? `${props.label} (${props.shortcut})` : props.label;
+  return (
+    <button
+      type="button"
+      className={props.className ?? "tool-button"}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      aria-pressed={props.pressed}
+      aria-label={props.label}
+      aria-keyshortcuts={props.shortcut?.replaceAll(" ", "")}
+      title={tip}
+    >
+      {props.children}
+      {props.showLabel && <span className="tool-button__label">{props.label}</span>}
+    </button>
+  );
+}
+
+export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
+  const s = useEditorState(store);
+  const hasProject = s.project !== null;
+  const tools: Array<{ id: Tool; label: string; key: string; icon: ReactNode }> = [
+    { id: "brush", label: "Brush", key: "B", icon: <IconBrush /> },
+    { id: "eraser", label: "Eraser", key: "E", icon: <IconEraser /> },
+  ];
+  return (
+    <div className="toolbar" role="toolbar" aria-label="Editor tools">
+      <div className="toolbar__group">
+        <ToolButton label="New project" onClick={onNew} disabled={s.busy}>
+          <IconNew />
+        </ToolButton>
+        <ToolButton label="Open project" onClick={onOpen} disabled={s.busy}>
+          <IconOpen />
+        </ToolButton>
+        <ToolButton
+          label="Save"
+          shortcut="Ctrl + S"
+          className="tool-button tool-button--primary"
+          onClick={() => void store.save()}
+          disabled={!hasProject || s.busy}
+          showLabel
+        >
+          <IconSave />
+        </ToolButton>
+      </div>
+      <div className="toolbar__group">
+        <ToolButton label="Undo" shortcut="Ctrl + Z" onClick={() => store.undo()} disabled={!s.canUndo}>
+          <IconUndo />
+        </ToolButton>
+        <ToolButton
+          label="Redo"
+          shortcut="Ctrl + Shift + Z"
+          onClick={() => store.redo()}
+          disabled={!s.canRedo}
+        >
+          <IconRedo />
+        </ToolButton>
+      </div>
+      <div className="toolbar__group" role="group" aria-label="Drawing tool">
+        {tools.map((t) => (
+          <ToolButton
+            key={t.id}
+            label={t.label}
+            shortcut={t.key}
+            pressed={s.tool === t.id}
+            onClick={() => store.selectTool(t.id)}
+            disabled={!hasProject}
+          >
+            {t.icon}
+          </ToolButton>
+        ))}
+      </div>
+      <div className="toolbar__group toolbar__zoom">
+        <ToolButton label="Zoom out" shortcut="-" onClick={() => zoomControls?.zoomOut()} disabled={!zoomControls}>
+          <IconZoomOut />
+        </ToolButton>
+        <output className="zoom-readout" aria-label="Zoom level" title="Zoom level (mouse wheel to zoom)">
+          {Math.round(zoom * 100)}%
+        </output>
+        <ToolButton label="Zoom in" shortcut="+" onClick={() => zoomControls?.zoomIn()} disabled={!zoomControls}>
+          <IconZoomIn />
+        </ToolButton>
+        <ToolButton label="Fit map to view" shortcut="0" onClick={() => zoomControls?.fit()} disabled={!zoomControls}>
+          <IconFit />
+        </ToolButton>
+      </div>
+    </div>
+  );
+}
