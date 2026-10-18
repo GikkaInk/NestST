@@ -325,7 +325,9 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         if (effective.length === 0) return false;
         next = history.push(paintCommand(mapId, effective, map), project);
       } catch (e) {
-        return fail("Could not paint there. ", e);
+        // Only the error: a save may be in flight, and the mode must stay as it is.
+        set({ error: `Could not paint there. ${ensurePeriod(capitalize(describe(e)))}` });
+        return false;
       }
       doneIds.push(nextStepId++);
       version += 1;

@@ -720,7 +720,8 @@ describe("migration notice and backup", () => {
     const store = await openV1(storage);
     await store.save();
     const before = backupPaths(storage);
-    store.paintStroke([ground(0, 0, 5)]);
+    expect(before.length).toBe(2);
+    expect(store.paintStroke([ground(0, 0, 5)])).toBe(true);
     expect(await store.save()).toBe(true);
     expect(backupPaths(storage)).toEqual(before);
   });
@@ -735,6 +736,41 @@ describe("migration notice and backup", () => {
     const { storage } = await storeWithNewProject();
     const store = createEditorStore(fakeSession(folder(storage)));
     expect(await store.open()).toBe(true);
+    expect(store.getState().notice).toBeNull();
+  });
+});
+
+describe("modes during a save", () => {
+  it("a failing stroke mid-save sets the error but keeps mode saving; new/open/save are rejected", async () => {
+    const storage = new GatedStorage();
+    const { store } = await storeWithNewProject(storage);
+    store.paintStroke([ground(1, 1, 1)]);
+    storage.hold();
+    const saving = store.save();
+    expect(store.paintStroke([ground(0, 0, 65536)])).toBe(false);
+    expect(store.getState().error).toMatch(/paint/i);
+    expect(store.getState().mode).toBe("saving");
+    expect(await store.newProject("B")).toBe(false);
+    expect(await store.open()).toBe(false);
+    expect(await store.save()).toBe(false);
+    expect(store.getState().mode).toBe("saving");
+    storage.release();
+    expect(await saving).toBe(true);
+    expect(store.getState().mode).toBe("idle");
+  });
+
+  it("a failed save returns to idle and keeps the backup and notice for the next save", async () => {
+    const storage = v1Storage();
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.open()).toBe(true);
+    storage.failOnWrite(1);
+    expect(await store.save()).toBe(false);
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().error).toMatch(/Could not save/);
+    expect(store.getState().notice).not.toBeNull();
+    expect(backupPaths(storage)).toEqual([]);
+    expect(await store.save()).toBe(true);
+    expect(backupPaths(storage).length).toBe(2);
     expect(store.getState().notice).toBeNull();
   });
 });
