@@ -135,7 +135,7 @@ describe("parseMap", () => {
   it("schemaVersion: wrong versions", () => {
     expect(mapError(validMap({ schemaVersion: 0 })).message).toContain("format version must be 1");
     const err = mapError(validMap({ schemaVersion: 2 }), "maps/town.json");
-    expect(err.code).toBe("invalid-map");
+    expect(err.code).toBe("invalid_map");
     expect(err.message).toContain("format version must be 1");
     expect(err.file).toBe("maps/town.json");
   });
@@ -184,7 +184,7 @@ describe("parseManifest", () => {
     const raw = validManifest();
     delete raw.maps;
     expect(manifestError(raw).message).toContain("field maps: this field is missing");
-    expect(manifestError(validManifest({ schemaVersion: 9 })).code).toBe("invalid-manifest");
+    expect(manifestError(validManifest({ schemaVersion: 9 })).code).toBe("invalid_manifest");
   });
 
   it("project name with Cyrillic and spaces is fine, empty is not", () => {

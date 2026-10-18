@@ -1,4 +1,4 @@
-export * from "./errors.js";
+export { NestError } from "./errors.js";
 export {
   CURRENT_SCHEMA_VERSION,
   MAX_TILE_ID,

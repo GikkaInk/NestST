@@ -91,7 +91,7 @@ export function parseMap(raw: unknown, file?: string): GameMap {
   const where = withFile(file, mapLabel(raw));
   const res = gameMapSchema.safeParse(raw, { error: messageForIssue });
   if (!res.success) {
-    throw new NestError("invalid-map", describeFirstIssue(res.error, where), file);
+    throw new NestError("invalid_map", describeFirstIssue(res.error, where), file);
   }
   const map = res.data;
 
@@ -99,12 +99,12 @@ export function parseMap(raw: unknown, file?: string): GameMap {
   const seen = new Set<string>();
   for (const layer of map.layers) {
     if (seen.has(layer.id)) {
-      throw new NestError("invalid-map", `${where}: layer id "${layer.id}" is used more than once`, file);
+      throw new NestError("invalid_map", `${where}: layer id "${layer.id}" is used more than once`, file);
     }
     seen.add(layer.id);
     if (layer.tiles.length !== expected) {
       throw new NestError(
-        "invalid-map",
+        "invalid_map",
         `${where}: layer size of "${layer.name}" (${layer.tiles.length} tiles) does not match width × height (${map.width} × ${map.height} = ${expected})`,
         file,
       );
@@ -121,20 +121,20 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
   const where = withFile(file, label);
   const res = projectManifestSchema.safeParse(raw, { error: messageForIssue });
   if (!res.success) {
-    throw new NestError("invalid-manifest", describeFirstIssue(res.error, where), file);
+    throw new NestError("invalid_manifest", describeFirstIssue(res.error, where), file);
   }
   const manifest = res.data;
 
   const ids = new Set<string>();
   manifest.maps.forEach((entry, i) => {
     if (ids.has(entry.id)) {
-      throw new NestError("invalid-manifest", `${where}: map "${entry.id}" is listed more than once in maps`, file);
+      throw new NestError("invalid_manifest", `${where}: map "${entry.id}" is listed more than once in maps`, file);
     }
     ids.add(entry.id);
     const expectedFile = `maps/${entry.id}.json`;
     if (entry.file !== expectedFile) {
       throw new NestError(
-        "invalid-manifest",
+        "invalid_manifest",
         `${where}, field maps[${i}].file: for map "${entry.id}" the file must be "${expectedFile}", but it is "${entry.file}"`,
         file,
       );
@@ -142,7 +142,7 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
   });
   if (!ids.has(manifest.startMapId)) {
     throw new NestError(
-      "invalid-manifest",
+      "invalid_manifest",
       `${where}, field startMapId: start map "${manifest.startMapId}" is not among the project maps`,
       file,
     );
