@@ -9,14 +9,14 @@ export function PlayView({ store }: { store: EditorStore }) {
 
   useEffect(() => {
     const host = hostRef.current;
-    const { project, currentMapId } = store.getState();
-    if (host === null || project === null || currentMapId === null) {
+    const { project, playingMapId } = store.getState();
+    if (host === null || project === null || playingMapId === null) {
       store.stopPlay();
       return;
     }
     let cancelled = false;
     let game: Game | null = null;
-    createGame({ project, mapId: currentMapId, host }).then(
+    createGame({ project, mapId: playingMapId, host }).then(
       (g) => {
         // Unmounted while Pixi was starting: it can only be destroyed now.
         if (cancelled) g.destroy();

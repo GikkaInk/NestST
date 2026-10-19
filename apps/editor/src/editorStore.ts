@@ -8,14 +8,30 @@ import {
   objectAt,
   paintCommand,
   placeObjectCommand,
+  removeDialogCommand,
   removeObjectCommand,
   saveProject,
+  setObjectPropsCommand,
   setSolidCommand,
+  setVariablesCommand,
+  upsertDialogCommand,
 } from "@nestst/core";
-import type { BackupFile, Command, Project, ProjectStorage, TileEdit } from "@nestst/core";
+import type {
+  BackupFile,
+  Command,
+  Dialog,
+  EventProps,
+  Project,
+  ProjectStorage,
+  TileEdit,
+  VariableDef,
+} from "@nestst/core";
 
-export type Tool = "brush" | "eraser" | "spawn" | "npc";
-export const TOOLS: readonly Tool[] = ["brush", "eraser", "spawn", "npc"];
+export type Tool = "brush" | "eraser" | "spawn" | "npc" | "event" | "select";
+export const TOOLS: readonly Tool[] = ["brush", "eraser", "spawn", "npc", "event", "select"];
+
+export type EditorView = "map" | "dialogs" | "variables";
+const VIEWS: readonly EditorView[] = ["map", "dialogs", "variables"];
 
 /** A project folder picked by the user, with the storage that reaches it. */
 export interface OpenedFolder {
@@ -64,13 +80,69 @@ export interface EditorState {
   showSolid: boolean;
   /** Counts opened/created projects; changes only when a project is adopted. */
   openSeq: number;
+  /** Which editor tab is shown. Not part of the history. */
+  view: EditorView;
+  /** Object picked with the select tool on the current map, or null. */
+  selectedObjectId: string | null;
+  /** Dialog open in the dialogs tab, or null. */
+  activeDialogId: string | null;
+  /** Map the running game started on; null unless playing. */
+  playingMapId: string | null;
 }
 
-/** Play needs a project whose current map has a spawn, and an idle editor. */
-export function canPlay(s: Pick<EditorState, "project" | "currentMapId" | "mode">): boolean {
-  if (s.project === null || s.currentMapId === null || s.mode !== "idle") return false;
-  const map = Object.hasOwn(s.project.maps, s.currentMapId) ? s.project.maps[s.currentMapId] : undefined;
+function hasSpawn(project: Project, mapId: string): boolean {
+  const map = Object.hasOwn(project.maps, mapId) ? project.maps[mapId] : undefined;
   return map !== undefined && map.objects.some((o) => o.kind === "spawn");
+}
+
+/** Map Play starts on: the current one if it has a spawn, else the start map if it has one, else null. */
+export function playMapId(s: Pick<EditorState, "project" | "currentMapId" | "mode">): string | null {
+  const project = s.project;
+  if (project === null) return null;
+  if (s.currentMapId !== null && hasSpawn(project, s.currentMapId)) return s.currentMapId;
+  const start = project.manifest.startMapId;
+  return hasSpawn(project, start) ? start : null;
+}
+
+/** Play needs a project with a spawn (see `playMapId`), and an idle editor. */
+export function canPlay(s: Pick<EditorState, "project" | "currentMapId" | "mode">): boolean {
+  return s.mode === "idle" && playMapId(s) !== null;
+}
+
+/**
+ * Props of a freshly placed event. Valid by construction: with no dialogs it
+ * teleports to its own cell (a placeholder), otherwise it starts the first dialog.
+ */
+export function defaultEventProps(project: Project, mapId: string, x: number, y: number): EventProps {
+  const map = Object.hasOwn(project.maps, mapId) ? project.maps[mapId] : undefined;
+  const used = new Set<string>();
+  for (const o of map?.objects ?? []) {
+    const name = (o.props as { name?: unknown }).name;
+    if (o.kind === "event" && typeof name === "string") used.add(name);
+  }
+  let n = 1;
+  while (used.has(`Event ${n}`)) n++;
+  const firstDialog = project.manifest.dialogs[0]?.id ?? Object.keys(project.dialogs)[0];
+  return {
+    name: `Event ${n}`,
+    trigger: "touch",
+    once: false,
+    actions: firstDialog !== undefined
+      ? [{ type: "dialog", dialog: firstDialog }]
+      : [{ type: "teleport", map: mapId, x, y }],
+  };
+}
+
+/** Unique dialog id from a name: lowercase [a-z0-9-], fallback `dialog`, suffix -2, -3 ... on collisions, max 64 chars. */
+function dialogIdFor(name: string, taken: (id: string) => boolean): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const base = slug.slice(0, 64).replace(/-+$/, "") || "dialog";
+  if (!taken(base)) return base;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const id = `${base.slice(0, 64 - suffix.length).replace(/-+$/, "")}${suffix}`;
+    if (!taken(id)) return id;
+  }
 }
 
 export interface EditorStore {
@@ -86,6 +158,18 @@ export interface EditorStore {
   paintStroke(edits: readonly TileEdit[]): boolean;
   /** Places a spawn or an NPC (by the current tool) on the cell. True if the map changed. */
   placeObjectAt(x: number, y: number): boolean;
+  setView(view: EditorView): void;
+  selectObject(id: string | null): void;
+  /** Selects the object on the cell; an empty cell clears the selection. True if an object was selected. */
+  selectObjectAt(x: number, y: number): boolean;
+  /** Replaces the props of an NPC or event on the current map (through the history). */
+  setObjectProps(id: string, props: Record<string, unknown>): boolean;
+  setVariables(vars: VariableDef[]): boolean;
+  saveDialog(dialog: Dialog): boolean;
+  deleteDialog(id: string): boolean;
+  selectDialog(id: string | null): void;
+  /** Creates an empty dialog named `name`, selects it and returns its id; null on error. */
+  newDialog(name: string): string | null;
   /** Removes the object on the cell. False if there is none. */
   removeObjectAt(x: number, y: number): boolean;
   /** Marks a tile as solid or passable (through the history). */
@@ -189,6 +273,10 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     rootLabel: "",
     showSolid: true,
     openSeq: 0,
+    view: "map",
+    selectedObjectId: null,
+    activeDialogId: null,
+    playingMapId: null,
   };
 
   const set = (patch: Partial<EditorState>): void => {
@@ -207,6 +295,21 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     canRedo: history.canRedo,
     dirty: topId() !== savedId,
   });
+
+  /** Patch after the project changed: history flags, and selections that point at something that is gone. */
+  const changePatch = (project: Project): Partial<EditorState> => {
+    const map = state.currentMapId !== null && Object.hasOwn(project.maps, state.currentMapId)
+      ? project.maps[state.currentMapId]
+      : undefined;
+    const selected = state.selectedObjectId;
+    const dialog = state.activeDialogId;
+    return {
+      project,
+      ...historyPatch(),
+      ...(selected !== null && !map?.objects.some((o) => o.id === selected) ? { selectedObjectId: null } : {}),
+      ...(dialog !== null && !Object.hasOwn(project.dialogs, dialog) ? { activeDialogId: null } : {}),
+    };
+  };
 
   /** Installs a freshly created or loaded project as the clean current one. */
   const adopt = (project: Project, picked: OpenedFolder): void => {
@@ -229,6 +332,10 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       projectName: project.manifest.name,
       rootLabel: picked.label,
       openSeq: state.openSeq + 1,
+      view: "map",
+      selectedObjectId: null,
+      activeDialogId: null,
+      playingMapId: null,
       ...historyPatch(),
     });
   };
@@ -248,24 +355,33 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     return next;
   };
 
-  /** Runs an edit of the current map; errors only set `error` (a save may be in flight). */
-  const edit = (prefix: string, make: (project: Project, mapId: string) => Command | null): boolean => {
+  /** Runs a project edit; errors only set `error` (a save may be in flight). Refused in dialog/loading/playing. */
+  const editProject = (prefix: string, make: (project: Project) => Command | null): boolean => {
     const project = state.project;
-    const mapId = state.currentMapId;
     if (state.mode !== "idle" && state.mode !== "saving") return false;
-    if (project === null || mapId === null || !Object.hasOwn(project.maps, mapId)) return false;
+    if (project === null) return false;
     let next: Project;
     try {
-      const cmd = make(project, mapId);
+      const cmd = make(project);
       if (cmd === null) return false;
       next = commit(cmd);
     } catch (e) {
       set({ error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
       return false;
     }
-    set({ project: next, ...historyPatch() });
+    set(changePatch(next));
     return true;
   };
+
+  /** Runs an edit of the current map. */
+  const edit = (prefix: string, make: (project: Project, mapId: string) => Command | null): boolean => {
+    const mapId = state.currentMapId;
+    return editProject(prefix, (project) =>
+      mapId === null || !Object.hasOwn(project.maps, mapId) ? null : make(project, mapId),
+    );
+  };
+
+  const canEditNow = (): boolean => state.project !== null && (state.mode === "idle" || state.mode === "saving");
 
   const fail = (prefix: string, e: unknown): false => {
     set({ mode: "idle", error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
@@ -400,19 +516,29 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         set({ error: `Could not paint there. ${ensurePeriod(capitalize(describe(e)))}` });
         return false;
       }
-      set({ project: next, ...historyPatch() });
+      set(changePatch(next));
       return true;
     },
 
     placeObjectAt(x, y) {
       const tool = state.tool;
-      if (tool !== "spawn" && tool !== "npc") return false;
+      if (tool !== "spawn" && tool !== "npc" && tool !== "event") return false;
       return edit("Could not place that there. ", (project, mapId) => {
         const map = project.maps[mapId]!;
         if (tool === "spawn") {
           // Already standing there: nothing to do (no history step, not dirty).
           if (map.objects.some((o) => o.kind === "spawn" && o.x === x && o.y === y)) return null;
           return placeObjectCommand(mapId, { id: "spawn", kind: "spawn", x, y, props: {} }, project);
+        }
+        if (tool === "event") {
+          const used = new Set(map.objects.map((o) => o.id));
+          let n = 1;
+          while (used.has(`event-${n}`)) n++;
+          return placeObjectCommand(
+            mapId,
+            { id: `event-${n}`, kind: "event", x, y, props: { ...defaultEventProps(project, mapId, x, y) } },
+            project,
+          );
         }
         const id = nextNpcId(map);
         return placeObjectCommand(
@@ -434,18 +560,80 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       return edit("Could not change that tile. ", (project) => setSolidCommand(tile, solid, project));
     },
 
+    setView(view) {
+      if (!VIEWS.includes(view) || view === state.view) return;
+      set({ view });
+    },
+
+    selectObject(id) {
+      if (!canEditNow()) return;
+      const map = state.currentMapId !== null ? state.project!.maps[state.currentMapId] : undefined;
+      const next = id !== null && map?.objects.some((o) => o.id === id) ? id : null;
+      if (next !== state.selectedObjectId) set({ selectedObjectId: next });
+    },
+
+    selectObjectAt(x, y) {
+      if (!canEditNow()) return false;
+      const map = state.currentMapId !== null ? state.project!.maps[state.currentMapId] : undefined;
+      const found = map === undefined ? undefined : objectAt(map, x, y);
+      const next = found?.id ?? null;
+      if (next !== state.selectedObjectId) set({ selectedObjectId: next });
+      return next !== null;
+    },
+
+    setObjectProps(id, props) {
+      return edit("Could not change that object. ", (project, mapId) =>
+        setObjectPropsCommand(mapId, id, props, project),
+      );
+    },
+
+    setVariables(vars) {
+      return editProject("Could not change the variables. ", (project) => setVariablesCommand(vars, project));
+    },
+
+    saveDialog(dialog) {
+      return editProject("Could not save the dialog. ", (project) => upsertDialogCommand(dialog, project));
+    },
+
+    deleteDialog(id) {
+      return editProject("Could not delete the dialog. ", (project) => removeDialogCommand(id, project));
+    },
+
+    selectDialog(id) {
+      const next = id !== null && state.project !== null && Object.hasOwn(state.project.dialogs, id) ? id : null;
+      if (next !== state.activeDialogId) set({ activeDialogId: next });
+    },
+
+    newDialog(name) {
+      let created: string | null = null;
+      const ok = editProject("Could not create the dialog. ", (project) => {
+        const trimmed = name.trim();
+        if (trimmed.length < 1 || trimmed.length > 200) {
+          throw new Error("the dialog name must be 1 to 200 characters");
+        }
+        const id = dialogIdFor(trimmed, (x) => Object.hasOwn(project.dialogs, x));
+        const cmd = upsertDialogCommand({ schemaVersion: 1, id, name: trimmed, start: null, nodes: [] }, project);
+        created = id;
+        return cmd;
+      });
+      if (!ok || created === null) return null;
+      set({ activeDialogId: created });
+      return created;
+    },
+
     toggleShowSolid() {
       set({ showSolid: !state.showSolid });
     },
 
     play() {
       if (!canPlay(state)) return false;
-      set({ mode: "playing" });
+      const mapId = playMapId(state)!;
+      set({ mode: "playing", playingMapId: mapId });
       return true;
     },
 
     stopPlay() {
-      if (state.mode === "playing") set({ mode: "idle" });
+      if (state.mode === "playing") set({ mode: "idle", playingMapId: null });
     },
 
     undo() {
@@ -453,7 +641,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       const next = history.undo(state.project);
       undoneIds.push(doneIds.pop()!);
       version += 1;
-      set({ project: next, ...historyPatch() });
+      set(changePatch(next));
     },
 
     redo() {
@@ -461,7 +649,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       const next = history.redo(state.project);
       doneIds.push(undoneIds.pop()!);
       version += 1;
-      set({ project: next, ...historyPatch() });
+      set(changePatch(next));
     },
 
     selectTool(tool) {

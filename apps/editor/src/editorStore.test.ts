@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { MANIFEST_FILE, loadProject } from "@nestst/core";
+import { MANIFEST_FILE, createEmptyProject, loadProject } from "@nestst/core";
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
-import { canPlay, createEditorStore, isBusy, strokeTile } from "./editorStore.js";
+import { canPlay, createEditorStore, defaultEventProps, isBusy, playMapId, strokeTile } from "./editorStore.js";
 import type { OpenedFolder, ProjectSession } from "./editorStore.js";
 
 /** Session whose pickers return the queued folders in order; `null` = cancelled. */
@@ -1007,5 +1007,218 @@ describe("objects, solid tiles and play", () => {
     expect(store.getState().showSolid).toBe(true);
     store.toggleShowSolid();
     expect(store.getState().showSolid).toBe(false);
+  });
+});
+
+describe("M2c: selection, event props, variables, dialogs, views", () => {
+  const sel = (store: ReturnType<typeof createEditorStore>) => store.getState().selectedObjectId;
+
+  it("defaultEventProps: self-teleport without dialogs, first dialog otherwise, smallest unused name", () => {
+    const project = createEmptyProject("P");
+    expect(defaultEventProps(project, "main", 3, 4)).toEqual({
+      name: "Event 1",
+      trigger: "touch",
+      once: false,
+      actions: [{ type: "teleport", map: "main", x: 3, y: 4 }],
+    });
+    const map = project.maps.main!;
+    const withObjs = {
+      ...project,
+      maps: {
+        ...project.maps,
+        main: {
+          ...map,
+          objects: [
+            { id: "a", kind: "event", x: 0, y: 0, props: { name: "Event 1" } },
+            { id: "b", kind: "event", x: 1, y: 0, props: { name: "Event 3" } },
+          ],
+        },
+      },
+    };
+    expect(defaultEventProps(withObjs as never, "main", 0, 0).name).toBe("Event 2");
+    const dlg = { schemaVersion: 1, id: "hello", name: "Hello", start: null, nodes: [] };
+    const withDialog = { ...project, dialogs: { hello: dlg } } as never;
+    expect(defaultEventProps(withDialog, "main", 0, 0).actions).toEqual([{ type: "dialog", dialog: "hello" }]);
+  });
+
+  it("event tool places an event with default props; undo clears the selection", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("event");
+    expect(store.placeObjectAt(2, 2)).toBe(true);
+    const ev = objectsOf(store).find((o) => o.kind === "event")!;
+    expect(ev.props).toMatchObject({ name: "Event 1", trigger: "touch", once: false });
+    expect(store.selectObjectAt(2, 2)).toBe(true);
+    expect(sel(store)).toBe(ev.id);
+    store.undo();
+    expect(sel(store)).toBeNull();
+  });
+
+  it("selectObjectAt selects, empty cell deselects, project open clears; select tool places nothing", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    expect(store.selectObjectAt(1, 1)).toBe(true);
+    expect(sel(store)).toBe("npc-1");
+    expect(store.selectObjectAt(5, 5)).toBe(false);
+    expect(sel(store)).toBeNull();
+    store.selectObject("npc-1");
+    expect(sel(store)).toBe("npc-1");
+    store.selectObject("nope");
+    expect(sel(store)).toBeNull();
+    store.selectObject("npc-1");
+    store.selectTool("select");
+    expect(store.placeObjectAt(3, 3)).toBe(false);
+    store.removeObjectAt(1, 1);
+    expect(sel(store)).toBeNull();
+  });
+
+  it("selection is cleared when a new project is opened", async () => {
+    const storage = new MemoryStorage();
+    const store = createEditorStore(fakeSession(folder(storage), folder(new MemoryStorage())));
+    await store.newProject("A");
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    store.selectObject("npc-1");
+    await store.newProject("B");
+    expect(sel(store)).toBeNull();
+  });
+
+  it("setObjectProps edits an NPC with undo; errors go only to error", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    store.undo();
+    store.redo();
+    expect(store.setObjectProps("npc-1", { name: "Bob" })).toBe(true);
+    expect(objectsOf(store)[0]!.props).toMatchObject({ name: "Bob" });
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    expect(objectsOf(store)[0]!.props).toMatchObject({ name: "NPC 1" });
+    expect(store.setObjectProps("npc-1", { name: "x", dialog: "missing" })).toBe(false);
+    expect(store.getState().error).toMatch(/^Could not change that object\. /);
+    expect(store.getState().mode).toBe("idle");
+    expect(store.setObjectProps("zzz", { name: "x" })).toBe(false);
+  });
+
+  it("newDialog slugs the name, avoids collisions, selects it, supports undo", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.newDialog("  Old Man's Talk! ")).toBe("old-man-s-talk");
+    expect(store.getState().activeDialogId).toBe("old-man-s-talk");
+    expect(store.newDialog("Old man s talk")).toBe("old-man-s-talk-2");
+    expect(store.newDialog("Old man s talk")).toBe("old-man-s-talk-3");
+    expect(store.newDialog("Привет")).toBe("dialog");
+    expect(store.newDialog("!!!")).toBe("dialog-2");
+    const long = store.newDialog("a".repeat(100))!;
+    expect(long.length).toBeLessThanOrEqual(64);
+    const dup = store.newDialog("a".repeat(100))!;
+    expect(dup.length).toBeLessThanOrEqual(64);
+    expect(dup).not.toBe(long);
+    const d = store.getState().project!.dialogs["old-man-s-talk"]!;
+    expect(d).toMatchObject({ schemaVersion: 1, name: "Old Man's Talk!", start: null, nodes: [] });
+    expect(store.newDialog("   ")).toBeNull();
+    expect(store.newDialog("x".repeat(201))).toBeNull();
+    expect(store.getState().error).toMatch(/^Could not create the dialog\. /);
+    store.undo();
+    store.undo();
+    store.undo();
+    expect(store.getState().activeDialogId).toBeNull();
+  });
+
+  it("saveDialog / deleteDialog with undo and reference protection", async () => {
+    const { store } = await storeWithNewProject();
+    const id = store.newDialog("Talk")!;
+    const dialog = {
+      ...store.getState().project!.dialogs[id]!,
+      start: "n1",
+      nodes: [{ id: "n1", x: 0, y: 0, type: "say", speaker: "A", text: "Hi", next: null }],
+    };
+    expect(store.saveDialog(dialog as never)).toBe(true);
+    expect(store.getState().project!.dialogs[id]!.nodes.length).toBe(1);
+    store.undo();
+    expect(store.getState().project!.dialogs[id]!.nodes.length).toBe(0);
+    store.redo();
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    expect(store.setObjectProps("npc-1", { name: "N", dialog: id })).toBe(true);
+    expect(store.deleteDialog(id)).toBe(false);
+    expect(store.getState().error).toMatch(/^Could not delete the dialog\. /);
+    expect(store.getState().mode).toBe("idle");
+    store.undo();
+    expect(store.deleteDialog(id)).toBe(true);
+    expect(store.getState().project!.dialogs[id]).toBeUndefined();
+    expect(store.getState().activeDialogId).toBeNull();
+    store.undo();
+    expect(store.getState().project!.dialogs[id]).toBeDefined();
+  });
+
+  it("setVariables refuses to drop a used variable; error only, mode untouched", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.setVariables([{ id: "key", name: "Key", type: "flag", initial: false } as never])).toBe(true);
+    const id = store.newDialog("Talk")!;
+    const dialog = {
+      ...store.getState().project!.dialogs[id]!,
+      start: "n1",
+      nodes: [{ id: "n1", x: 0, y: 0, type: "set", variable: "key", op: "set", value: true, next: null }],
+    };
+    expect(store.saveDialog(dialog as never)).toBe(true);
+    expect(store.setVariables([])).toBe(false);
+    expect(store.getState().error).toMatch(/^Could not change the variables\. /);
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().project!.manifest.variables.length).toBe(1);
+    store.undo();
+    store.undo();
+    expect(store.setVariables([])).toBe(true);
+  });
+
+  it("views do not touch history; edits are refused while playing", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.getState().view).toBe("map");
+    store.setView("dialogs");
+    store.setView("variables");
+    expect(store.getState().view).toBe("variables");
+    expect(store.getState().canUndo).toBe(false);
+    expect(store.getState().dirty).toBe(false);
+    store.setView("bogus" as never);
+    expect(store.getState().view).toBe("variables");
+    store.selectTool("spawn");
+    store.placeObjectAt(0, 0);
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    expect(store.play()).toBe(true);
+    const before = store.getState();
+    expect(store.setObjectProps("npc-1", { name: "Z" })).toBe(false);
+    expect(store.setVariables([])).toBe(false);
+    expect(store.newDialog("A")).toBeNull();
+    expect(store.saveDialog({} as never)).toBe(false);
+    expect(store.deleteDialog("x")).toBe(false);
+    expect(store.selectObjectAt(1, 1)).toBe(false);
+    expect(store.getState().project).toBe(before.project);
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().mode).toBe("playing");
+    store.stopPlay();
+    expect(store.getState().canUndo).toBe(before.canUndo);
+    expect(store.getState().dirty).toBe(before.dirty);
+  });
+
+  it("playMapId: current with spawn, else start with spawn, else null; play remembers it", async () => {
+    const { store } = await storeWithNewProject();
+    expect(playMapId(store.getState())).toBeNull();
+    expect(canPlay(store.getState())).toBe(false);
+    store.selectTool("spawn");
+    store.placeObjectAt(0, 0);
+    expect(playMapId(store.getState())).toBe("main");
+    const s = store.getState();
+    const project = s.project!;
+    const other = { ...project.maps.main!, id: "other", objects: [] };
+    const base = { project: { ...project, maps: { ...project.maps, other } }, mode: "idle" as const };
+    expect(playMapId({ ...base, currentMapId: "other" })).toBe("main");
+    expect(playMapId({ ...base, currentMapId: "main" })).toBe("main");
+    const noSpawn = { ...base.project, maps: { ...base.project.maps, main: { ...project.maps.main!, objects: [] } } };
+    expect(playMapId({ project: noSpawn, currentMapId: "other", mode: "idle" })).toBeNull();
+    expect(playMapId({ project: null, currentMapId: null, mode: "idle" })).toBeNull();
+    expect(store.play()).toBe(true);
+    expect(store.getState().playingMapId).toBe("main");
+    store.stopPlay();
+    expect(store.getState().playingMapId).toBeNull();
   });
 });
