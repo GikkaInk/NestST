@@ -1,7 +1,16 @@
+/**
+ * Content commands (variables, dialogs, object props). Same contract as objectOps.ts:
+ * a command is validated once, when it is created, against the project passed as `before`;
+ * `apply`/`revert` are deltas over whatever project they get and do NOT re-validate.
+ * So a command must be created from the CURRENT project and pushed right away
+ * (this is how the store's commit(cmd) works). Guards such as "variable is still used"
+ * fire at creation time through findReferences, on the then-current project.
+ */
 import { MAX_DIALOGS, MAX_VARIABLES, parseDialog, variableDefSchema } from "./dialogSchema.js";
 import type { Dialog, VariableDef } from "./dialogSchema.js";
 import { NestError } from "./errors.js";
 import type { Command } from "./mapOps.js";
+import { parseEventProps, parseNpcProps } from "./objectProps.js";
 import type { Project } from "./project.js";
 import { checkObjectRefs, findReferences, validateProjectRefs } from "./refs.js";
 import type { RefTarget } from "./refs.js";
@@ -44,7 +53,13 @@ export function setVariablesCommand(variables: VariableDef[], before: Project): 
   for (const o of old) {
     const kept = next.find((v) => v.id === o.id);
     if (kept === undefined) {
-      refuseIfReferenced(before, { kind: "variable", id: o.id }, `remove variable "${o.id}"`);
+      const hint = next.some((v) => !old.some((x) => x.id === v.id))
+        ? " (rename is not supported: create a new variable and update the references)"
+        : "";
+      const refs = findReferences(before, { kind: "variable", id: o.id });
+      if (refs.length > 0) {
+        fail(`cannot remove variable "${o.id}": it is used by ${refs.join("; ")}${hint}`);
+      }
     } else if (kept.type !== o.type) {
       refuseIfReferenced(before, { kind: "variable", id: o.id }, `change the type of variable "${o.id}"`);
     }
@@ -130,7 +145,7 @@ export function removeDialogCommand(id: string, before: Project): Command {
 
 function withProps(p: Project, mapId: string, objectId: string, props: Record<string, unknown>): Project {
   const map: GameMap | undefined = Object.hasOwn(p.maps, mapId) ? p.maps[mapId] : undefined;
-  if (map === undefined) fail(`map "${mapId}" does not exist in the project`);
+  if (map === undefined) throw new NestError("unknown_map", `map "${mapId}" does not exist in the project`);
   if (!map!.objects.some((o) => o.id === objectId)) {
     fail(`object "${objectId}" does not exist in map "${mapId}"`);
   }
@@ -152,11 +167,14 @@ export function setObjectPropsCommand(
   if (obj!.kind !== "npc" && obj!.kind !== "event") {
     fail(`in map "${map.name}": a ${obj!.kind} has no properties to edit`);
   }
-  const next = { ...props };
+  // Keep a deep copy of the parsed props (unknown extra keys survive), so the caller's objects are not aliased.
+  let next: Record<string, unknown>;
   try {
+    const parsed = obj!.kind === "npc" ? parseNpcProps(props) : parseEventProps(props);
+    next = structuredClone(parsed) as unknown as Record<string, unknown>;
     checkObjectRefs(before, mapId, { ...obj!, props: next });
   } catch (e) {
-    fail((e as Error).message);
+    return fail((e as Error).message);
   }
   const old = obj!.props;
   return {
@@ -168,5 +186,8 @@ export function setObjectPropsCommand(
 
 /** Throws `invalid_edit` when `mapId` is the start map or a teleport leads to it. For future map deletion. */
 export function removeMapGuard(project: Project, mapId: string): void {
+  if (!Object.hasOwn(project.maps, mapId)) {
+    throw new NestError("unknown_map", `map "${mapId}" does not exist in the project`);
+  }
   refuseIfReferenced(project, { kind: "map", id: mapId }, `remove map "${mapId}"`);
 }

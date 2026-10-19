@@ -128,7 +128,45 @@ describe("setVariablesCommand", () => {
   });
 });
 
+describe("setVariablesCommand edge cases", () => {
+  const used = () => withObject(makeProject(), "main", eventObj([{ type: "set", variable: "gold", op: "set", value: 3 }]));
+
+  it("allows changing only the initial value or the order of a used variable", () => {
+    const p = used();
+    expect(setVariablesCommand([{ ...gold, initial: 5 }, met], p).apply(p).manifest.variables[0]!.initial).toBe(5);
+    expect(setVariablesCommand([met, gold], p).apply(p).manifest.variables.map((v) => v.id)).toEqual(["met", "gold"]);
+  });
+
+  it("refuses an id rename of a used variable with a hint", () => {
+    const err = refused(() => setVariablesCommand([{ ...gold, id: "coins" }, met], used()));
+    expect(err.message).toContain("rename is not supported: create a new variable and update the references");
+  });
+
+  it("guards against the CURRENT project: a dialog that starts using a variable blocks its removal", () => {
+    const p = makeProject();
+    expect(() => setVariablesCommand([met], p)).not.toThrow();
+    const current = upsertDialogCommand(dlg("shop", setGold), p).apply(p);
+    expect(refused(() => setVariablesCommand([met], current)).message).toContain('dialog "shop"');
+  });
+
+  it("revert keeps an unrelated change made in between", () => {
+    const p = makeProject();
+    const cmd = setVariablesCommand([gold], p);
+    const a = withObject(cmd.apply(p), "main", npcObj({ name: "Ann" }));
+    const r = cmd.revert(a);
+    expect(r.manifest.variables).toEqual([gold, met]);
+    expect(r.maps.main!.objects).toHaveLength(1);
+  });
+});
+
 describe("upsertDialogCommand", () => {
+  it("refuses a new dialog past MAX_DIALOGS", () => {
+    const p = makeProject();
+    const entries = Array.from({ length: 200 }, (_, i) => ({ id: `d${i}`, file: `dialogs/d${i}.json` }));
+    const full = { ...p, manifest: { ...p.manifest, dialogs: entries } };
+    refused(() => upsertDialogCommand(dlg("one-more"), full));
+  });
+
   it("adds a dialog: appends the manifest entry, undo removes both", () => {
     const p = makeProject();
     const cmd = upsertDialogCommand(dlg("new"), p);
@@ -261,7 +299,7 @@ describe("setObjectPropsCommand", () => {
     const p = withObject(makeProject(), "main", { id: "sp", kind: "spawn", x: 0, y: 0, props: {} });
     refused(() => setObjectPropsCommand("main", "sp", { name: "x" }, p));
     refused(() => setObjectPropsCommand("main", "nope", { name: "x" }, p));
-    expect(() => setObjectPropsCommand("zzz", "sp", {}, p)).toThrow(NestError);
+    expect(() => setObjectPropsCommand("zzz", "sp", {}, p)).toThrow(expect.objectContaining({ code: "unknown_map" }));
   });
 
   it("refuses invalid props and dangling references", () => {
@@ -286,6 +324,20 @@ describe("setObjectPropsCommand", () => {
     const r = cmd.revert(moved);
     expect(r.maps.main!.objects[0]).toMatchObject({ x: 3, props: { name: "Ann" } });
     refused(() => cmd.apply({ ...p, maps: { ...p.maps, main: { ...p.maps.main!, objects: [] } } }));
+    const { main: _m, ...noMain } = p.maps;
+    expect(() => cmd.apply({ ...p, maps: noMain })).toThrow(expect.objectContaining({ code: "unknown_map" }));
+  });
+
+  it("does not alias the caller's props or actions", () => {
+    const p = withObject(makeProject(), "main", eventObj([{ type: "dialog", dialog: "hello" }]));
+    const actions: Record<string, unknown>[] = [{ type: "dialog", dialog: "hello" }];
+    const props = { name: "E", trigger: "touch", once: false, actions, extra: 1 };
+    const cmd = setObjectPropsCommand("main", "ev-1", props, p);
+    actions[0]!.dialog = "bye";
+    actions.push({ type: "dialog", dialog: "bye" });
+    props.name = "Changed";
+    const applied = cmd.apply(p).maps.main!.objects[0]!.props;
+    expect(applied).toEqual({ name: "E", trigger: "touch", once: false, actions: [{ type: "dialog", dialog: "hello" }], extra: 1 });
   });
 });
 
@@ -300,6 +352,10 @@ describe("removeMapGuard", () => {
     const p = withObject(makeProject(), "main", eventObj([{ type: "teleport", map: "cave", x: 0, y: 0 }]));
     const err = refused(() => removeMapGuard(p, "cave"));
     expect(err.message).toContain('event "E" on map "main"');
+  });
+
+  it("throws unknown_map for a missing map", () => {
+    expect(() => removeMapGuard(makeProject(), "ghost")).toThrow(expect.objectContaining({ code: "unknown_map" }));
   });
 
   it("passes for an unreferenced map", () => {
