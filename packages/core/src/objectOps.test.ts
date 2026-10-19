@@ -12,7 +12,7 @@ import {
 } from "./index.js";
 import type { Command, MapObject, Project } from "./index.js";
 
-const npc = (id: string, x: number, y: number): MapObject => ({ id, kind: "npc", x, y, props: {} });
+const npc = (id: string, x: number, y: number): MapObject => ({ id, kind: "npc", x, y, props: { name: "NPC" } });
 const spawn = (id: string, x: number, y: number): MapObject => ({ id, kind: "spawn", x, y, props: {} });
 
 /** Map "town" 4x3: ground is tile 1 everywhere except (3,2) which is tile 2; deco layer is empty. */

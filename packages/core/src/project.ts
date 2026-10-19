@@ -1,6 +1,7 @@
 import { NestError } from "./errors.js";
 import { parseDialog } from "./dialogSchema.js";
 import type { Dialog } from "./dialogSchema.js";
+import { validateProjectRefs } from "./refs.js";
 import { migrateRaw } from "./migrate.js";
 import { FORMAT_VERSIONS, parseManifest, parseMap } from "./schema.js";
 import type { GameMap, ProjectManifest } from "./schema.js";
@@ -172,6 +173,8 @@ export async function saveProject(
     }
   }
   const files: Array<{ path: string; text: string }> = [];
+  const parsedMaps: Record<string, GameMap> = {};
+  const parsedDialogs: Record<string, Dialog> = {};
   for (const entry of manifest.maps) {
     const map = Object.hasOwn(project.maps, entry.id) ? project.maps[entry.id] : undefined;
     if (map === undefined) {
@@ -189,6 +192,7 @@ export async function saveProject(
         entry.file,
       );
     }
+    parsedMaps[entry.id] = parsed;
     files.push({ path: entry.file, text: serializeMap(parsed) });
   }
   for (const entry of manifest.dialogs) {
@@ -208,8 +212,10 @@ export async function saveProject(
         entry.file,
       );
     }
+    parsedDialogs[entry.id] = parsed;
     files.push({ path: entry.file, text: serialize(parsed) });
   }
+  validateProjectRefs({ manifest, maps: parsedMaps, dialogs: parsedDialogs });
   files.push({ path: MANIFEST_FILE, text: serialize(manifest) });
 
   if (options?.backup && options.backup.length > 0) {
@@ -314,5 +320,7 @@ export async function loadProject(storage: ProjectStorage): Promise<Project> {
     noteIfMigrated("dialog", entry.file, raw);
     dialogs[entry.id] = dialog;
   }
-  return migratedFrom.length > 0 ? { manifest, maps, dialogs, migratedFrom } : { manifest, maps, dialogs };
+  const project: Project = { manifest, maps, dialogs };
+  validateProjectRefs(project);
+  return migratedFrom.length > 0 ? { ...project, migratedFrom } : project;
 }

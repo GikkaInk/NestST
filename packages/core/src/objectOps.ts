@@ -1,13 +1,14 @@
 import { NestError } from "./errors.js";
 import type { Command } from "./mapOps.js";
 import type { Project } from "./project.js";
+import { checkObjectRefs } from "./refs.js";
 import { MAX_TILE_ID } from "./schema.js";
 import type { GameMap, MapObject, ProjectManifest } from "./schema.js";
 
-const OBJECT_KINDS: readonly string[] = ["spawn", "npc"];
+const OBJECT_KINDS: readonly string[] = ["spawn", "npc", "event"];
 
 function kindName(kind: string): string {
-  return kind === "spawn" ? "spawn" : "NPC";
+  return kind === "spawn" ? "spawn" : kind === "event" ? "event" : "NPC";
 }
 
 function fail(why: string): never {
@@ -90,7 +91,14 @@ function checkCell(map: GameMap, solid: readonly number[], x: number, y: number,
 export function placeObjectCommand(mapId: string, object: MapObject, before: Project): Command {
   const map = getMap(before, mapId);
   if (!OBJECT_KINDS.includes(object.kind)) {
-    fail(`in map "${map.name}": object kind must be "spawn" or "npc", but it is "${object.kind}"`);
+    fail(`in map "${map.name}": object kind must be "spawn", "npc" or "event", but it is "${object.kind}"`);
+  }
+  if (object.kind === "npc" || object.kind === "event") {
+    try {
+      checkObjectRefs(before, mapId, object);
+    } catch (e) {
+      fail((e as Error).message);
+    }
   }
   const replaced = object.kind === "spawn" ? map.objects.find((o) => o.kind === "spawn") : undefined;
   if (map.objects.some((o) => o.id === object.id && o !== replaced)) {

@@ -40,3 +40,12 @@ export {
   moveObjectCommand,
   removeObjectCommand,
 } from "./objectOps.js";
+export {
+  MAX_EVENT_ACTIONS,
+  eventActionSchema,
+  parseNpcProps,
+  parseEventProps,
+} from "./objectProps.js";
+export type { EventAction, NpcProps, EventProps } from "./objectProps.js";
+export { validateProjectRefs, findReferences } from "./refs.js";
+export type { RefTarget } from "./refs.js";
