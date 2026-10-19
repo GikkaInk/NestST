@@ -50,3 +50,10 @@ export {
 export type { EventAction, NpcProps, EventProps } from "./objectProps.js";
 export { validateProjectRefs, findReferences } from "./refs.js";
 export type { RefTarget } from "./refs.js";
+export {
+  setVariablesCommand,
+  upsertDialogCommand,
+  removeDialogCommand,
+  setObjectPropsCommand,
+  removeMapGuard,
+} from "./contentOps.js";
