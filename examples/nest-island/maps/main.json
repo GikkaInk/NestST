@@ -61,7 +61,27 @@
       "x": 25,
       "y": 16,
       "props": {
-        "name": "NPC 1"
+        "name": "Guide",
+        "dialog": "guide-intro"
+      }
+    },
+    {
+      "id": "event-1",
+      "kind": "event",
+      "x": 27,
+      "y": 15,
+      "props": {
+        "name": "Cave entrance",
+        "trigger": "touch",
+        "once": false,
+        "actions": [
+          {
+            "type": "teleport",
+            "map": "cave",
+            "x": 2,
+            "y": 4
+          }
+        ]
       }
     }
   ]

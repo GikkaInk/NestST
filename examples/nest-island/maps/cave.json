@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "id": "cave",
+  "name": "Cave",
+  "viewMode": "topdown",
+  "width": 12,
+  "height": 8,
+  "tileSize": 32,
+  "layers": [
+    {
+      "id": "ground",
+      "name": "Ground",
+      "visible": true,
+      "tiles": [
+        13,13,13,13,13,13,13,13,13,13,13,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,5,5,5,5,5,5,5,5,5,5,13,
+        13,13,13,13,13,13,13,13,13,13,13,13
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "event-1",
+      "kind": "event",
+      "x": 1,
+      "y": 4,
+      "props": {
+        "name": "Exit",
+        "trigger": "touch",
+        "once": false,
+        "actions": [
+          {
+            "type": "teleport",
+            "map": "main",
+            "x": 28,
+            "y": 15
+          }
+        ]
+      }
+    },
+    {
+      "id": "event-2",
+      "kind": "event",
+      "x": 6,
+      "y": 3,
+      "props": {
+        "name": "Sign",
+        "trigger": "interact",
+        "once": false,
+        "actions": [
+          {
+            "type": "dialog",
+            "dialog": "cave-sign"
+          }
+        ]
+      }
+    }
+  ]
+}

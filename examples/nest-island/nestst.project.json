@@ -10,6 +10,10 @@
     {
       "id": "main",
       "file": "maps/main.json"
+    },
+    {
+      "id": "cave",
+      "file": "maps/cave.json"
     }
   ],
   "startMapId": "main",
@@ -17,6 +21,28 @@
     13,
     26
   ],
-  "variables": [],
-  "dialogs": []
+  "variables": [
+    {
+      "id": "met-guide",
+      "name": "Met the guide",
+      "type": "flag",
+      "initial": false
+    },
+    {
+      "id": "coins",
+      "name": "Coins",
+      "type": "number",
+      "initial": 0
+    }
+  ],
+  "dialogs": [
+    {
+      "id": "guide-intro",
+      "file": "dialogs/guide-intro.json"
+    },
+    {
+      "id": "cave-sign",
+      "file": "dialogs/cave-sign.json"
+    }
+  ]
 }

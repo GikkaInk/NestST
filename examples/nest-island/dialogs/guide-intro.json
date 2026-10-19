@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "id": "guide-intro",
+  "name": "Guide intro",
+  "start": "welcome",
+  "nodes": [
+    {
+      "id": "welcome",
+      "x": 0,
+      "y": 0,
+      "type": "say",
+      "speaker": "Guide",
+      "text": "Welcome to Nest Island!",
+      "next": "ask"
+    },
+    {
+      "id": "ask",
+      "x": 300,
+      "y": 0,
+      "type": "choice",
+      "options": [
+        {
+          "text": "Who are you?",
+          "next": "about"
+        },
+        {
+          "text": "Any tips?",
+          "next": "check"
+        },
+        {
+          "text": "Bye",
+          "next": null
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "x": 600,
+      "y": -150,
+      "type": "say",
+      "speaker": "Guide",
+      "text": "I am the island guide. Nice to meet you!",
+      "next": "meet"
+    },
+    {
+      "id": "meet",
+      "x": 900,
+      "y": -150,
+      "type": "set",
+      "variable": "met-guide",
+      "op": "set",
+      "value": true,
+      "next": "coin"
+    },
+    {
+      "id": "check",
+      "x": 600,
+      "y": 100,
+      "type": "branch",
+      "condition": {
+        "variable": "met-guide",
+        "op": "==",
+        "value": true
+      },
+      "then": "known",
+      "else": "unknown"
+    },
+    {
+      "id": "known",
+      "x": 900,
+      "y": 50,
+      "type": "say",
+      "speaker": "Guide",
+      "text": "We have already met! Keep exploring.",
+      "next": null
+    },
+    {
+      "id": "unknown",
+      "x": 900,
+      "y": 200,
+      "type": "say",
+      "speaker": "Guide",
+      "text": "Talk to me first.",
+      "next": null
+    },
+    {
+      "id": "coin",
+      "x": 1200,
+      "y": -150,
+      "type": "set",
+      "variable": "coins",
+      "op": "add",
+      "value": 1,
+      "next": "gift"
+    },
+    {
+      "id": "gift",
+      "x": 1500,
+      "y": -150,
+      "type": "say",
+      "speaker": "Guide",
+      "text": "Take this coin.",
+      "next": null
+    }
+  ]
+}

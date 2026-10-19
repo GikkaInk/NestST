@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "cave-sign",
+  "name": "Cave sign",
+  "start": "s",
+  "nodes": [
+    {
+      "id": "s",
+      "x": 0,
+      "y": 0,
+      "type": "say",
+      "speaker": "",
+      "text": "Nest Island Cave — watch your step!",
+      "next": null
+    }
+  ]
+}
