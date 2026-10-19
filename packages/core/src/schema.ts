@@ -2,13 +2,15 @@ import { z } from "zod";
 import { NestError, describeFirstIssue, messageForIssue } from "./errors.js";
 
 /** Current format version of each file kind. */
-export const FORMAT_VERSIONS = { manifest: 2, map: 2 } as const;
+export const FORMAT_VERSIONS = { manifest: 3, map: 2 } as const;
 export type FormatKind = keyof typeof FORMAT_VERSIONS;
 export const MAX_TILE_ID = 65535;
 /** Tiles in the built-in tileset and palette (ids 1..255; 0 is empty). */
 export const BUILTIN_TILE_COUNT = 255;
 export const MAX_MAP_SIZE = 2048;
 export const MAX_LAYERS = 16;
+/** Upper limit of width × height × layers of one map. */
+export const MAX_MAP_CELLS = 4194304;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ID_MESSAGE =
@@ -97,6 +99,10 @@ export const gameMapSchema = z.looseObject({
   objects: z.array(mapObjectSchema),
 });
 
+const solidTilesSchema = z
+  .array(intRange(1, MAX_TILE_ID), { error: "must be a list" })
+  .refine((v) => new Set(v).size === v.length, { error: "tiles must not repeat" });
+
 export const manifestMapEntrySchema = z.looseObject({
   id: idSchema,
   file: z.string().min(1),
@@ -112,6 +118,7 @@ export const projectManifestSchema = z.looseObject({
   tileSize: intRange(1, 256),
   maps: z.array(manifestMapEntrySchema),
   startMapId: idSchema,
+  solidTiles: solidTilesSchema,
 });
 
 export type TileLayer = z.infer<typeof tileLayerSchema>;
@@ -164,6 +171,14 @@ export function parseMap(raw: unknown, file?: string): GameMap {
   }
   const map = res.data;
 
+  const cells = map.width * map.height * map.layers.length;
+  if (cells > MAX_MAP_CELLS) {
+    throw new NestError(
+      "invalid_map",
+      `${where}: map is too big: ${cells} cells (width × height × layers), the limit is ${MAX_MAP_CELLS}`,
+      file,
+    );
+  }
   const expected = map.width * map.height;
   const seen = new Set<string>();
   for (const layer of map.layers) {
@@ -180,6 +195,8 @@ export function parseMap(raw: unknown, file?: string): GameMap {
     }
   }
   const objectIds = new Set<string>();
+  const cellOwners = new Map<number, string>();
+  let spawnId: string | undefined;
   for (const obj of map.objects) {
     if (objectIds.has(obj.id)) {
       throw new NestError("invalid_map", `${where}: object id "${obj.id}" is used more than once`, file);
@@ -192,6 +209,26 @@ export function parseMap(raw: unknown, file?: string): GameMap {
         file,
       );
     }
+    if (obj.kind === "spawn") {
+      if (spawnId !== undefined) {
+        throw new NestError(
+          "invalid_map",
+          `${where}: a map can have only one spawn, but "${spawnId}" and "${obj.id}" are both spawns`,
+          file,
+        );
+      }
+      spawnId = obj.id;
+    }
+    const cell = obj.y * map.width + obj.x;
+    const other = cellOwners.get(cell);
+    if (other !== undefined) {
+      throw new NestError(
+        "invalid_map",
+        `${where}: objects "${other}" and "${obj.id}" are in the same cell (${obj.x}, ${obj.y})`,
+        file,
+      );
+    }
+    cellOwners.set(cell, obj.id);
   }
   return map;
 }

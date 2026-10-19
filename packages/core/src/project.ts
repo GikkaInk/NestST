@@ -86,6 +86,7 @@ export function createEmptyProject(name: string): Project {
     tileSize: DEFAULT_TILE_SIZE,
     maps: [{ id: DEFAULT_MAP_ID, file: `maps/${DEFAULT_MAP_ID}.json` }],
     startMapId: DEFAULT_MAP_ID,
+    solidTiles: [],
   };
   return { manifest, maps: { [DEFAULT_MAP_ID]: map } };
 }

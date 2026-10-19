@@ -23,7 +23,7 @@ function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function validManifest(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     name: "Моя игра",
     resolution: { width: 640, height: 360 },
     tileSize: 16,
@@ -32,6 +32,7 @@ function validManifest(over: Record<string, unknown> = {}): Record<string, unkno
       { id: "cave", file: "maps/cave.json" },
     ],
     startMapId: "town",
+    solidTiles: [],
     ...over,
   };
 }
@@ -249,12 +250,12 @@ describe("parseMap on huge maps", () => {
     expect(mapError(raw).message).toMatch(/layers\[0\]\.tiles\[5000\]: must be a whole number from 0 to 65535/);
   });
 
-  it("still parses a valid 2048×2048×3 map fast", () => {
-    const raw = hugeMap(7, 3);
+  it("still parses a valid 2048×2048 map fast", () => {
+    const raw = hugeMap(7, 1);
     const started = performance.now();
     const map = parseMap(raw);
     expect(performance.now() - started).toBeLessThan(2000);
-    expect(map.layers).toHaveLength(3);
-    expect(map.layers[2]!.tiles[2048 * 2048 - 1]).toBe(7);
+    expect(map.layers).toHaveLength(1);
+    expect(map.layers[0]!.tiles[2048 * 2048 - 1]).toBe(7);
   });
 });

@@ -13,6 +13,16 @@ export interface MigrationStep {
 export const MIGRATIONS: MigrationStep[] = [
   { kind: "manifest", from: 1, to: 2, run: (raw) => ({ ...raw, schemaVersion: 2 }) },
   {
+    kind: "manifest",
+    from: 2,
+    to: 3,
+    run: (raw) => ({
+      ...raw,
+      schemaVersion: 3,
+      solidTiles: Array.isArray(raw.solidTiles) ? raw.solidTiles : [],
+    }),
+  },
+  {
     kind: "map",
     from: 1,
     to: 2,

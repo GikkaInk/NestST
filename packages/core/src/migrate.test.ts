@@ -44,9 +44,10 @@ function v0Manifest(): Record<string, unknown> {
 }
 
 describe("migrateRaw", () => {
-  it("MIGRATIONS has one 1 to 2 step per kind", () => {
+  it("MIGRATIONS lists every step in order", () => {
     expect(MIGRATIONS.map((s) => [s.kind, s.from, s.to])).toEqual([
       ["manifest", 1, 2],
+      ["manifest", 2, 3],
       ["map", 1, 2],
     ]);
   });
@@ -79,7 +80,7 @@ describe("migrateRaw", () => {
 
   it("v0 manifest -> fake step -> parseManifest succeeds, unknown key survives", () => {
     const out = parseManifest(migrateRaw("manifest", v0Manifest(), [step(0, 1, "manifest"), ...MIGRATIONS]));
-    expect(out.schemaVersion).toBe(2);
+    expect(out.schemaVersion).toBe(3);
     expect(out.futureKey).toBe("x");
   });
 

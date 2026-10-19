@@ -5,6 +5,7 @@ export {
   BUILTIN_TILE_COUNT,
   MAX_MAP_SIZE,
   MAX_LAYERS,
+  MAX_MAP_CELLS,
   parseMap,
   parseManifest,
 } from "./schema.js";

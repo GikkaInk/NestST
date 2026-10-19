@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "name": "Nest Island",
   "resolution": {
     "width": 1280,
@@ -12,5 +12,9 @@
       "file": "maps/main.json"
     }
   ],
-  "startMapId": "main"
+  "startMapId": "main",
+  "solidTiles": [
+    13,
+    26
+  ]
 }
