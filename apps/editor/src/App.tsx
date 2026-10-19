@@ -7,9 +7,12 @@ import { ErrorBanner } from "./components/ErrorBanner.js";
 import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
 import { MapEditor } from "./components/MapEditor.js";
+import { ObjectInspector } from "./components/ObjectInspector.js";
 import { Palette } from "./components/Palette.js";
 import { StartScreen } from "./components/StartScreen.js";
 import { Toolbar } from "./components/Toolbar.js";
+import { VariablesView } from "./components/VariablesView.js";
+import { ViewTabs } from "./components/ViewTabs.js";
 import type { ZoomControls } from "./components/Toolbar.js";
 
 type Leave = "new" | "open" | "close";
@@ -27,6 +30,8 @@ export function App({ store }: { store: EditorStore }) {
   const [controls, setControls] = useState<ZoomControls | null>(null);
   const [pending, setPending] = useState<Leave | null>(null);
   const editing = s.project !== null && !showStart;
+  // The game always runs over the map view.
+  const view = s.mode === "playing" ? "map" : s.view;
 
   const proceed = useCallback(
     (kind: Leave) => {
@@ -91,6 +96,8 @@ export function App({ store }: { store: EditorStore }) {
       else if (e.code === "KeyE") store.selectTool("eraser");
       else if (e.code === "KeyP") store.selectTool("spawn");
       else if (e.code === "KeyN") store.selectTool("npc");
+      else if (e.code === "KeyV") store.selectTool("select");
+      else if (e.code === "KeyT") store.selectTool("event");
       else if (e.code === "Equal" || e.code === "NumpadAdd") controls?.zoomIn();
       else if (e.code === "Minus" || e.code === "NumpadSubtract") controls?.zoomOut();
       else if (e.code === "Digit0" || e.code === "Numpad0") controls?.fit();
@@ -133,18 +140,33 @@ export function App({ store }: { store: EditorStore }) {
         )}
       </header>
 
+      {editing && <ViewTabs store={store} />}
+
       <ErrorBanner message={s.error} onDismiss={store.dismissError} />
       <NoticeBanner message={s.notice} onDismiss={store.dismissNotice} />
 
       {editing ? (
-        <main className="workspace">
-          <Palette store={store} />
-          {s.mode === "playing" ? (
-            <PlayView store={store} />
-          ) : (
-            <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
-          )}
-        </main>
+        view === "variables" ? (
+          <main className="workspace workspace--single">
+            <VariablesView store={store} />
+          </main>
+        ) : view === "dialogs" ? (
+          <main className="workspace workspace--single">
+            <section className="card dialogs-panel" aria-label="Dialogs">
+              <h2 className="panel-title">Dialogs</h2>
+            </section>
+          </main>
+        ) : (
+          <main className="workspace workspace--map">
+            <Palette store={store} />
+            {s.mode === "playing" ? (
+              <PlayView store={store} />
+            ) : (
+              <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
+            )}
+            <ObjectInspector store={store} />
+          </main>
+        )
       ) : (
         <StartScreen
           store={store}

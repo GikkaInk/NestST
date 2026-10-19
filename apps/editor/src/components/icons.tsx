@@ -97,6 +97,17 @@ export const IconNpc = () => (
   </Icon>
 );
 
+export const IconEvent = () => (
+  <Icon>
+    <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+  </Icon>
+);
+export const IconSelect = () => (
+  <Icon>
+    <path d="M5 3l14 7-6 2-2 6z" />
+  </Icon>
+);
+
 export const IconPlay = () => (
   <Icon>
     <path d="M7 4.5v15l12-7.5z" />

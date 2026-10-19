@@ -5,12 +5,14 @@ import { useEditorState } from "../useEditorState.js";
 import {
   IconBrush,
   IconEraser,
+  IconEvent,
   IconFit,
   IconNew,
   IconNpc,
   IconOpen,
   IconPlay,
   IconRedo,
+  IconSelect,
   IconSave,
   IconSpawn,
   IconStop,
@@ -79,6 +81,8 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
     { id: "eraser", label: "Eraser", key: "E", icon: <IconEraser /> },
     { id: "spawn", label: "Spawn", key: "P", icon: <IconSpawn /> },
     { id: "npc", label: "NPC", key: "N", icon: <IconNpc /> },
+    { id: "event", label: "Event", key: "T", icon: <IconEvent /> },
+    { id: "select", label: "Select", key: "V", icon: <IconSelect /> },
   ];
   return (
     <div className="toolbar" role="toolbar" aria-label="Editor tools">

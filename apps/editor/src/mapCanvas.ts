@@ -95,6 +95,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
   let shownObjects: unknown = null;
   let shownSolidKey: { map: GameMap; solid: readonly number[]; show: boolean } | null = null;
   const hover = new Graphics();
+  const selection = new Graphics();
   let hoverCell: Cell | null = null;
 
   let stroke: Stroke | null = null;
@@ -119,6 +120,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     checkB: cssColor("--map-check-b", "#f6eadc"),
     outline: cssColor("--map-outline", "#3a2e4f"),
     hover: cssColor("--map-hover", "#ff7aa8"),
+    select: cssColor("--map-select", "#8a5cff"),
   });
   let palette = colors();
 
@@ -140,6 +142,16 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
       hover
         .rect(hoverCell.x * t, hoverCell.y * t, t, t)
         .stroke({ width: 2.5 / cam.scale, color: palette.hover, alignment: 1 });
+    }
+    // Frame of the selected object: same container and camera as the other objects.
+    selection.clear();
+    const selectedId = store.getState().selectedObjectId;
+    const picked = selectedId === null ? undefined : map.objects.find((o) => o.id === selectedId);
+    if (picked) {
+      const t = map.tileSize;
+      selection
+        .rect(picked.x * t, picked.y * t, t, t)
+        .stroke({ width: 3 / cam.scale, color: palette.select, alignment: 1 });
     }
   };
 
@@ -291,8 +303,14 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     const { tool } = store.getState();
     const cell = screenToCell(cam, p.x, p.y, map.tileSize);
     const inside = cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height;
-    if (tool === "spawn" || tool === "npc") {
+    if (tool === "spawn" || tool === "npc" || tool === "event") {
       if (inside) store.placeObjectAt(cell.x, cell.y);
+      return;
+    }
+    if (tool === "select") {
+      // Only this tool selects: selectObjectAt clears the selection on an empty cell.
+      if (inside) store.selectObjectAt(cell.x, cell.y);
+      else store.selectObject(null);
       return;
     }
     if (tool === "eraser" && inside && eraserAction(map, cell) === "object") {
@@ -428,7 +446,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     host.appendChild(app.canvas);
     checker = new TilingSprite({ texture: checkerTexture(palette.checkA, palette.checkB), width: 1, height: 1 });
     back.addChild(checker, outline);
-    front.addChild(solidOverlay, hover);
+    front.addChild(solidOverlay, hover, selection);
     app.stage.addChild(back, front);
 
     app.canvas.addEventListener("pointerdown", onPointerDown);
