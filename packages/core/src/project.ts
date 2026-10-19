@@ -1,7 +1,7 @@
 import { NestError } from "./errors.js";
 import { parseDialog } from "./dialogSchema.js";
 import type { Dialog } from "./dialogSchema.js";
-import { validateProjectRefs } from "./refs.js";
+import { collectProjectRefProblems } from "./refs.js";
 import { migrateRaw } from "./migrate.js";
 import { FORMAT_VERSIONS, parseManifest, parseMap } from "./schema.js";
 import type { GameMap, ProjectManifest } from "./schema.js";
@@ -33,6 +33,11 @@ export interface Project {
   dialogs: Record<string, Dialog>;
   /** Original text of the files that were migrated on load; absent when none were. */
   migratedFrom?: BackupFile[];
+  /**
+   * Set by `loadProject` only: broken references found on load (up to 20 plain English messages).
+   * The project is still returned so it can be opened and repaired; `saveProject` refuses it until they are fixed.
+   */
+  refProblems?: string[];
 }
 
 export interface SaveOptions {
@@ -142,9 +147,10 @@ export function serializeMap(map: GameMap): string {
  *
  * Guarantee after an interrupted save (write error, crash): every file is
  * either entirely old or entirely new, never half-written (that part is the
- * job of `ProjectStorage.writeAtomic`). Because the manifest goes last, an
- * interrupted save can leave the OLD manifest next to some NEW maps or dialogs; each map
- * and dialog file is self-contained, so such a mix still loads without errors.
+ * job of `ProjectStorage.writeAtomic`). Maps, dialogs and the manifest refer to each other,
+ * so a mix of old and new files can contain dangling references. Such a project is always
+ * loadable: `loadProject` reports the dangling references in `refProblems`, and they must
+ * be fixed before the next save (which stays strict and refuses to write while any exist).
  */
 export async function saveProject(
   storage: ProjectStorage,
@@ -215,7 +221,10 @@ export async function saveProject(
     parsedDialogs[entry.id] = parsed;
     files.push({ path: entry.file, text: serialize(parsed) });
   }
-  validateProjectRefs({ manifest, maps: parsedMaps, dialogs: parsedDialogs });
+  const problems = collectProjectRefProblems({ manifest, maps: parsedMaps, dialogs: parsedDialogs }, 1);
+  if (problems.length > 0) {
+    throw new NestError("invalid_project", `${problems[0]}. Fix these references before saving.`);
+  }
   files.push({ path: MANIFEST_FILE, text: serialize(manifest) });
 
   if (options?.backup && options.backup.length > 0) {
@@ -321,6 +330,11 @@ export async function loadProject(storage: ProjectStorage): Promise<Project> {
     dialogs[entry.id] = dialog;
   }
   const project: Project = { manifest, maps, dialogs };
-  validateProjectRefs(project);
-  return migratedFrom.length > 0 ? { ...project, migratedFrom } : project;
+  // Reference problems alone must not make the project unopenable (an interrupted save can cause them).
+  const refProblems = collectProjectRefProblems(project);
+  return {
+    ...project,
+    ...(migratedFrom.length > 0 ? { migratedFrom } : {}),
+    ...(refProblems.length > 0 ? { refProblems } : {}),
+  };
 }

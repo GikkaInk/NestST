@@ -11,60 +11,106 @@ export interface RefTarget {
 
 type VarTypes = Map<string, "flag" | "number">;
 
-function fail(text: string): never {
+/** Collects reference problems; with `stopEarly`, scanning ends once `limit` is reached. */
+interface Sink {
+  out: string[];
+  limit: number;
+  stopEarly: boolean;
+}
+
+function add(sink: Sink, text: string): void {
+  if (sink.out.length < sink.limit) sink.out.push(text);
+}
+
+const done = (sink: Sink): boolean => sink.stopEarly && sink.out.length >= sink.limit;
+
+/** Props that cannot be parsed are not a reference problem: they always throw. */
+function propsFail(text: string): never {
   throw new NestError("invalid_project", text);
 }
 
-function checkVariable(types: VarTypes, id: string, where: string): "flag" | "number" {
+function checkVariable(sink: Sink, types: VarTypes, id: string, where: string): "flag" | "number" | undefined {
   const t = types.get(id);
-  if (t === undefined) fail(`${where}: variable "${id}" does not exist`);
-  return t!;
+  if (t === undefined) add(sink, `${where}: variable "${id}" does not exist`);
+  return t;
 }
 
-function checkCondition(types: VarTypes, c: Condition, where: string): void {
-  const t = checkVariable(types, c.variable, where);
+function checkCondition(sink: Sink, types: VarTypes, c: Condition, where: string): void {
+  const t = checkVariable(sink, types, c.variable, where);
+  if (t === undefined) return;
   const isFlag = typeof c.value === "boolean";
   if (isFlag !== (t === "flag")) {
-    fail(`${where}: variable "${c.variable}" is a ${t}, so the condition value must be ${t === "flag" ? "true or false" : "a number"}`);
+    add(sink, `${where}: variable "${c.variable}" is a ${t}, so the condition value must be ${t === "flag" ? "true or false" : "a number"}`);
   }
 }
 
 function checkSet(
+  sink: Sink,
   types: VarTypes,
   s: { variable: string; op: "set" | "add"; value: boolean | number },
   where: string,
 ): void {
-  const t = checkVariable(types, s.variable, where);
-  if (s.op === "add" && t !== "number") fail(`${where}: "add" needs a number variable, but "${s.variable}" is a flag`);
+  const t = checkVariable(sink, types, s.variable, where);
+  if (t === undefined) return;
+  if (s.op === "add" && t !== "number") {
+    add(sink, `${where}: "add" needs a number variable, but "${s.variable}" is a flag`);
+    return;
+  }
   if ((typeof s.value === "boolean") !== (t === "flag")) {
-    fail(`${where}: variable "${s.variable}" is a ${t}, so the value must be ${t === "flag" ? "true or false" : "a number"}`);
+    add(sink, `${where}: variable "${s.variable}" is a ${t}, so the value must be ${t === "flag" ? "true or false" : "a number"}`);
   }
 }
 
-/** Checks that every reference inside the project points at something that exists; throws on the first problem. */
-export function validateProjectRefs(project: Project): void {
+function scan(project: Project, sink: Sink): void {
   const types: VarTypes = new Map(project.manifest.variables.map((v) => [v.id, v.type]));
 
   for (const dialog of Object.values(project.dialogs)) {
     for (const node of dialog.nodes) {
+      if (done(sink)) return;
       const where = `dialog "${dialog.id}", node "${node.id}"`;
-      if (node.type === "set") checkSet(types, node, where);
-      else if (node.type === "branch") checkCondition(types, node.condition, where);
+      if (node.type === "set") checkSet(sink, types, node, where);
+      else if (node.type === "branch") checkCondition(sink, types, node.condition, where);
       else if (node.type === "choice") {
         node.options.forEach((o, i) => {
-          if (o.condition) checkCondition(types, o.condition, `${where}, option ${i + 1}`);
+          if (o.condition) checkCondition(sink, types, o.condition, `${where}, option ${i + 1}`);
         });
       }
     }
   }
 
   for (const map of Object.values(project.maps)) {
-    for (const obj of map.objects) checkObjectRefs(project, map.id, obj, types);
+    for (const obj of map.objects) {
+      if (done(sink)) return;
+      scanObject(sink, project, map.id, obj, types);
+    }
   }
+}
+
+/**
+ * Every reference problem in the project as plain English messages, at most `limit` (default 20).
+ * Props that cannot even be parsed are not reference problems: those throw `invalid_project`.
+ */
+export function collectProjectRefProblems(project: Project, limit = 20): string[] {
+  const sink: Sink = { out: [], limit, stopEarly: false };
+  scan(project, sink);
+  return sink.out;
+}
+
+/** Checks that every reference inside the project points at something that exists; throws on the first problem. */
+export function validateProjectRefs(project: Project): void {
+  const sink: Sink = { out: [], limit: 1, stopEarly: true };
+  scan(project, sink);
+  if (sink.out.length > 0) throw new NestError("invalid_project", sink.out[0]!);
 }
 
 /** Checks one `npc` or `event` object (props and references); other kinds are ignored. Throws `invalid_project`. */
 export function checkObjectRefs(project: Project, mapId: string, obj: MapObject, types?: VarTypes): void {
+  const sink: Sink = { out: [], limit: 1, stopEarly: true };
+  scanObject(sink, project, mapId, obj, types);
+  if (sink.out.length > 0) throw new NestError("invalid_project", sink.out[0]!);
+}
+
+function scanObject(sink: Sink, project: Project, mapId: string, obj: MapObject, types?: VarTypes): void {
   const varTypes: VarTypes = types ?? new Map(project.manifest.variables.map((v) => [v.id, v.type]));
   const hasDialog = (id: string) => Object.hasOwn(project.dialogs, id);
   const where = `map "${mapId}", ${obj.kind} "${obj.id}"`;
@@ -73,31 +119,32 @@ export function checkObjectRefs(project: Project, mapId: string, obj: MapObject,
     try {
       props = parseNpcProps(obj.props);
     } catch (e) {
-      fail(`${where}: ${(e as Error).message}`);
+      propsFail(`${where}: ${(e as Error).message}`);
     }
     if (props!.dialog !== undefined && !hasDialog(props!.dialog)) {
-      fail(`${where}: dialog "${props!.dialog}" does not exist`);
+      add(sink, `${where}: dialog "${props!.dialog}" does not exist`);
     }
   } else if (obj.kind === "event") {
     let props;
     try {
       props = parseEventProps(obj.props);
     } catch (e) {
-      fail(`${where}: ${(e as Error).message}`);
+      propsFail(`${where}: ${(e as Error).message}`);
     }
-    if (props!.condition) checkCondition(varTypes, props!.condition, `${where}, condition`);
+    if (props!.condition) checkCondition(sink, varTypes, props!.condition, `${where}, condition`);
     props!.actions.forEach((a, i) => {
       const at = `${where}, action ${i + 1}`;
       if (a.type === "dialog") {
-        if (!hasDialog(a.dialog)) fail(`${at}: dialog "${a.dialog}" does not exist`);
+        if (!hasDialog(a.dialog)) add(sink, `${at}: dialog "${a.dialog}" does not exist`);
       } else if (a.type === "set") {
-        checkSet(varTypes, a, at);
+        checkSet(sink, varTypes, a, at);
       } else {
         const target = Object.hasOwn(project.maps, a.map) ? project.maps[a.map] : undefined;
-        if (target === undefined) fail(`${at}: teleport goes to map "${a.map}", which does not exist`);
-        if (a.x >= target!.width || a.y >= target!.height) {
+        if (target === undefined) {
+          add(sink, `${at}: teleport goes to map "${a.map}", which does not exist`);
+        } else if (a.x >= target.width || a.y >= target.height) {
           // A target cell with a solid tile is not checked here: the runtime handles it.
-          fail(`${at}: teleport cell (${a.x}, ${a.y}) is outside map "${a.map}" (${target!.width} x ${target!.height})`);
+          add(sink, `${at}: teleport cell (${a.x}, ${a.y}) is outside map "${a.map}" (${target.width} x ${target.height})`);
         }
       }
     });

@@ -48,7 +48,7 @@ export {
   parseEventProps,
 } from "./objectProps.js";
 export type { EventAction, NpcProps, EventProps } from "./objectProps.js";
-export { validateProjectRefs, findReferences } from "./refs.js";
+export { validateProjectRefs, collectProjectRefProblems, findReferences } from "./refs.js";
 export type { RefTarget } from "./refs.js";
 export {
   setVariablesCommand,
