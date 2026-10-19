@@ -125,6 +125,14 @@ describe("stepFrame: touch", () => {
     expect(env.session.vars["n"]).toBe(2);
   });
 
+  it("a dialog opened on arrival while a key is held cancels the next step on the tile", () => {
+    const d = makeDialog("d", "a", [say("a", null)]);
+    const env = start(makeProject({ dialogs: [d], objects: [spawn, ev("t", 0, 1, { trigger: "touch", actions: [{ type: "dialog", dialog: "d" }] })] }));
+    const s = walk(env, { ...IDLE, held: "down", tapped: "down" });
+    expect(env.session.dialog).not.toBeNull();
+    expect(s.player).toMatchObject({ x: 0, y: 1, moving: null, queued: null });
+  });
+
   it("a touch event starts a dialog", () => {
     const d = makeDialog("d", "a", [say("a", null)]);
     const env = start(makeProject({ dialogs: [d], objects: [spawn, ev("t", 0, 1, { trigger: "touch", actions: [{ type: "dialog", dialog: "d" }] })] }));
@@ -209,6 +217,23 @@ describe("stepFrame: teleport", () => {
     s = walk({ ...env, state: s }, { ...IDLE, tapped: "down" }); // onto "o" again
     expect(s.player).toMatchObject({ x: 0, y: 1 });
     expect(env.session.vars["n"]).toBe(1);
+  });
+
+  it("a map with the same tile size is a valid target", () => {
+    const env = start(twoMaps([spawn, ev("e", 0, 1, { trigger: "interact", actions: [tele(1, 1)] })], []), { facing: "down" });
+    const s = stepFrame(env.project, env.session, env.state, { ...IDLE, action: true }, 16);
+    expect(s.mapChanged).toBe(true);
+    expect(env.session.error).toBeNull();
+  });
+
+  it("a map with a different tile size is rejected and the old map is kept", () => {
+    const project = twoMaps([spawn, ev("e", 0, 1, { trigger: "interact", actions: [tele(1, 1)] })], []);
+    project.maps["other"] = { ...project.maps["other"]!, tileSize: 32 };
+    const env = start(project, { facing: "down" });
+    const s = stepFrame(env.project, env.session, env.state, { ...IDLE, action: true }, 16);
+    expect(s.mapChanged).toBe(false);
+    expect(env.session.mapId).toBe("main");
+    expect(env.session.error).toMatch(/tile size differs/);
   });
 
   it.each([

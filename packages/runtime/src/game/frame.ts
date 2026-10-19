@@ -31,6 +31,10 @@ function applyTeleport(project: Project, session: Session, state: FrameState): F
     session.error = `Teleport target map "${tp.map}" does not exist`;
     return stay;
   }
+  if (map.tileSize !== state.world.tileSize) {
+    session.error = `Cannot teleport to map "${map.name}": its tile size differs from the current map`;
+    return stay;
+  }
   const inside =
     Number.isInteger(tp.x) && Number.isInteger(tp.y) && tp.x >= 0 && tp.y >= 0 && tp.x < map.width && tp.y < map.height;
   if (!inside) {
@@ -75,9 +79,14 @@ export function stepFrame(
       return applyTeleport(project, session, state);
     }
   }
-  const next = stepPlayer(state.world, state.player, input, dtMs);
+  let next = stepPlayer(state.world, state.player, input, dtMs);
   if (next.x !== state.player.x || next.y !== state.player.y) {
     enterCell(session, project, session.mapId, next.x, next.y);
+    // A dialog opened on arrival: stepPlayer may already have begun the next step from the
+    // new cell. Its origin is that cell (x/y), so cancelling leaves the player on the tile.
+    if ((session.dialog !== null || session.error !== null) && next.moving !== null) {
+      next = { ...next, moving: null, queued: null };
+    }
   }
   return applyTeleport(project, session, { world: state.world, player: next });
 }

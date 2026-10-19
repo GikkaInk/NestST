@@ -80,6 +80,7 @@ describe("createDialogBox", () => {
     box.show(null, "Something broke");
     expect(box.container.visible).toBe(true);
     expect(texts(box.container).some((t) => t.text.includes("Something broke"))).toBe(true);
+    expect(texts(box.container).some((t) => t.text === "Press Space to continue")).toBe(true);
     box.show(null);
     expect(box.container.visible).toBe(false);
     box.destroy();
@@ -93,6 +94,18 @@ describe("createDialogBox", () => {
     expect(box.container.y).toBeGreaterThan(y1);
     expect(texts(box.container).map((t) => t.text)).toEqual(["Ann", "Hello there"]);
     expect(box.container.y).toBeLessThan(480);
+    box.destroy();
+  });
+
+  it("a long text and 6 long options stay inside the screen and keep the selection", () => {
+    const box = createDialogBox(400, 200);
+    box.show({ kind: "say", speaker: "Ann", text: "word ".repeat(120) });
+    expect(box.container.y).toBeGreaterThanOrEqual(0);
+    const opts = Array.from({ length: 6 }, (_, i) => ({ text: `option ${i} ${"long ".repeat(30)}` }));
+    box.show({ kind: "choice", options: opts, selected: 5 });
+    expect(texts(box.container).some((t) => t.text.startsWith("> option 5"))).toBe(true);
+    box.show({ kind: "choice", options: opts, selected: 0 });
+    expect(texts(box.container).some((t) => t.text.startsWith("> option 0"))).toBe(true);
     box.destroy();
   });
 
