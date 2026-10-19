@@ -19,7 +19,7 @@ NestST is for people who have a story but don't want to write code: storytellers
 
 <div align="center">
 
-<img src="docs/images/nestst-features.png" alt="Three cards: Map editor (ready, M1), Dialogue and events (next, M2), AI picture studio (soon, M3)." width="100%">
+<img src="docs/images/nestst-features.png" alt="Three cards: Map editor (ready, M1), Dialogue and events (ready, M2), AI picture studio (soon, M3)." width="100%">
 
 </div>
 
