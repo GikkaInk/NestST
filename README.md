@@ -5,13 +5,13 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-orange.svg)
-![M1: map editor works](https://img.shields.io/badge/M1-map%20editor%20works-brightgreen.svg)
+![M2: play, dialogue and events](https://img.shields.io/badge/M2-play%2C%20dialogue%20%26%20events-brightgreen.svg)
 
 **A lightweight, open-source 2D game maker for Linux, so anyone can tell their story as a game. No programming required.**
 
 </div>
 
-> 🪺 **Early days, honestly.** There is a first small map editor (M1): you can paint tiles and save a project, and that's about it for now. No characters, events or dialogue yet. We try to be clear about what is verified and what is not.
+> 🪺 **Early days, honestly.** You can already make a tiny playable story: paint a map, place a player start and NPCs, write branching dialogue, set up events and press Play. Graphics are still flat-colour placeholders; real images and the AI studio come next. We try to be clear about what is verified and what is not.
 
 ## ♡ The idea
 
@@ -23,8 +23,9 @@ NestST is for people who have a story but don't want to write code: storytellers
 
 </div>
 
-- **Visual map editor:** tiles, layers, collisions, NPCs, spawn points.
-- **Dialogue, quests and events without code:** simple "event → condition → action" blocks.
+- **Visual map editor:** tiles, walls and water you can't walk through, NPCs, player start, undo/redo.
+- **Dialogue and events without code:** branching dialogue in a node editor, variables, and simple "event → condition → action" blocks (start a dialogue, change a variable, teleport to another map). Quests are planned.
+- **Play button:** walk around your map right inside the editor and talk to your characters.
 - **AI image studio:** portraits, icons and sprites, reviewed by you before they enter the project. Opt-in, bring your own key. The editor and your games work fine without AI.
 - **Lightweight:** a native Linux app (Tauri); games can run in the browser too.
 - **Open:** MIT license, a versioned project format with safe migrations. Your games belong to you.
@@ -37,11 +38,19 @@ The first template is a top-down JRPG. Other game modes (for example a side view
 
 <img src="docs/images/editor-nest-island.png" alt="Screenshot of the M1 editor in dark theme with the Nest Island example open: a tile palette on the left, a 48 by 32 map in the middle showing a crescent island with a beach, a village of four houses, a pond, trees and flowers in a blue sea, and a toolbar with new, open, save, undo, redo, brush, eraser and zoom." width="70%">
 
-<sub>*Nest Island*, a tiny example map made with the editor itself. Open the folder [`examples/nest-island`](examples/nest-island) to explore it.</sub>
+<sub>*Nest Island*, a tiny example map made with the editor itself. Open the folder [`examples/nest-island`](examples/nest-island) to explore it (it has a talking guide and a cave).</sub>
 
 </div>
 
-## 🌸 Try the M1 editor
+### 🐈 A small game to play: Lost Cat
+
+[`examples/lost-cat`](examples/lost-cat) is a complete tiny quest made with the editor: Mira lost her cat, so you walk to the garden, find Mochi and bring her home for a reward. It shows a two-map game with variables, a branching dialogue, signs and gate teleports. Open the folder in the editor, press **Play**, and read its [README](examples/lost-cat/README.md) for a short tour of how it is built.
+
+<div align="center">
+
+</div>
+
+## 🌸 Try the editor
 
 Requirements: Rust, Node.js 24+, pnpm, `webkit2gtk-4.1`, `gtk3` (Linux only).
 
@@ -53,15 +62,18 @@ pnpm -F @nestst/editor tauri build --no-bundle   # release binary: apps/editor/s
 
 What you can do right now:
 
-- **Create a project** in a folder you pick, or **open** an existing one.
-- **Paint tiles** with the brush and the eraser (32 built-in coloured tiles for now; your own images come later).
+- **Create a project** in a folder you pick, or **open** an existing one (older projects are upgraded automatically, and the old files are backed up first).
+- **Paint tiles** with the brush and the eraser (32 built-in coloured tiles for now; your own images come later). Mark a tile **Blocks walking** to make walls and water.
+- **Place objects:** a player **Spawn** (P), **NPC**s (N) and **Event**s (T); select one (V) to edit its name, dialogue, trigger, condition and actions.
+- **Variables** tab: flags and numbers your story can remember. **Dialogs** tab: build branching dialogue as connected nodes (say, choice, set variable, branch).
+- **Play** (F5): walk with the arrow keys or WASD, talk with Space / Enter / Z, stop with Esc.
 - **Undo / redo** (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y), **save** (Ctrl+S). Shortcuts also work on a Russian keyboard layout.
 - **Zoom** with the mouse wheel (50 %–800 %), **pan** with the middle mouse button or Space + drag.
 - Light and dark themes. Close the window with unsaved changes and the editor asks first.
 
-A project is a plain folder: `nestst.project.json` plus one JSON file per map in `maps/`. Files are written safely (temp file, then rename), and the app can only touch folders you picked in its dialog.
+A project is a plain folder: `nestst.project.json`, one JSON file per map in `maps/` and one per dialogue in `dialogs/`. Files are written safely (temp file, then rename), and the app can only touch folders you picked in its dialog.
 
-Not there yet: player, NPCs, events, dialogue, game preview (that's M2), image import, more than one layer in the UI, Windows.
+Not there yet: images instead of coloured shapes, quests, items and inventory, sound, more than one layer in the UI, Windows. The graphics and the dialogue box are placeholders for now.
 
 ## 🗺 Roadmap
 
@@ -69,11 +81,11 @@ Not there yet: player, NPCs, events, dialogue, game preview (that's M2), image i
 |---|---|---|
 | M0 | Risk prototype: Tauri + PixiJS + node editor, measurements | ✅ done ([report](docs/m0-report.md)) |
 | M1 | Project core, versioned format, map rendering, map editor with undo/redo | ✅ done and hands-on checked ([report](docs/m1-report.md)) |
-| M2 | Events and dialogue, a playable "player → NPC → dialogue" scene | ⏳ next |
+| M2 | Player and NPCs, Play preview, events, branching dialogue, variables, teleports, two example games | ✅ done |
 | M3 | AI studio: generate, review, import | ⏳ |
 | M4 | Items, inventory, JRPG template, export | ⏳ |
 
-More: [design spec](docs/superpowers/specs/2026-10-18-nestst-design.md), [research](docs/research.md), [M1 plan](docs/superpowers/plans/2026-10-18-m1-core-and-map-editor.md), [M1 report](docs/m1-report.md). *(The in-depth docs are currently written in Russian; they will be translated as the project matures.)*
+More: [research](docs/research.md), [M0 report](docs/m0-report.md), [M1 report](docs/m1-report.md). *(The in-depth docs are currently written in Russian; they will be translated as the project matures.)*
 
 ## 🛠 Tech
 
