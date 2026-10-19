@@ -4,13 +4,18 @@ import {
   BUILTIN_TILE_COUNT,
   createEmptyProject,
   loadProject,
+  nextNpcId,
+  objectAt,
   paintCommand,
+  placeObjectCommand,
+  removeObjectCommand,
   saveProject,
+  setSolidCommand,
 } from "@nestst/core";
-import type { BackupFile, Project, ProjectStorage, TileEdit } from "@nestst/core";
+import type { BackupFile, Command, Project, ProjectStorage, TileEdit } from "@nestst/core";
 
-export type Tool = "brush" | "eraser";
-export const TOOLS: readonly Tool[] = ["brush", "eraser"];
+export type Tool = "brush" | "eraser" | "spawn" | "npc";
+export const TOOLS: readonly Tool[] = ["brush", "eraser", "spawn", "npc"];
 
 /** A project folder picked by the user, with the storage that reaches it. */
 export interface OpenedFolder {
@@ -28,9 +33,9 @@ export interface ProjectSession {
   pickOpen(): Promise<OpenedFolder | null>;
 }
 
-export type EditorMode = "idle" | "saving" | "loading" | "dialog";
+export type EditorMode = "idle" | "saving" | "loading" | "dialog" | "playing";
 
-/** New/Open/Save must not start while the editor is doing something else. */
+/** New/Open/Save must not start while the editor is doing something else (including Play). */
 export function isBusy(s: Pick<EditorState, "mode">): boolean {
   return s.mode !== "idle";
 }
@@ -55,6 +60,15 @@ export interface EditorState {
   notice: string | null;
   projectName: string;
   rootLabel: string;
+  /** Draw the solid-tile overlay on the map. */
+  showSolid: boolean;
+}
+
+/** Play needs a project whose current map has a spawn, and an idle editor. */
+export function canPlay(s: Pick<EditorState, "project" | "currentMapId" | "mode">): boolean {
+  if (s.project === null || s.currentMapId === null || s.mode !== "idle") return false;
+  const map = Object.hasOwn(s.project.maps, s.currentMapId) ? s.project.maps[s.currentMapId] : undefined;
+  return map !== undefined && map.objects.some((o) => o.kind === "spawn");
 }
 
 export interface EditorStore {
@@ -68,6 +82,16 @@ export interface EditorStore {
   save(): Promise<boolean>;
   /** One brush drag = one undo step. True if the map changed. */
   paintStroke(edits: readonly TileEdit[]): boolean;
+  /** Places a spawn or an NPC (by the current tool) on the cell. True if the map changed. */
+  placeObjectAt(x: number, y: number): boolean;
+  /** Removes the object on the cell. False if there is none. */
+  removeObjectAt(x: number, y: number): boolean;
+  /** Marks a tile as solid or passable (through the history). */
+  setTileSolid(tile: number, solid: boolean): boolean;
+  toggleShowSolid(): void;
+  /** Enters play mode; false unless `canPlay`. */
+  play(): boolean;
+  stopPlay(): void;
   undo(): void;
   redo(): void;
   selectTool(tool: Tool): void;
@@ -159,6 +183,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     notice: null,
     projectName: "",
     rootLabel: "",
+    showSolid: true,
   };
 
   const set = (patch: Partial<EditorState>): void => {
@@ -194,6 +219,36 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       rootLabel: picked.label,
       ...historyPatch(),
     });
+  };
+
+  /**
+   * Pushes `cmd` to the history and does the bookkeeping shared by every edit.
+   * Throws if the command does not apply; nothing changes then.
+   */
+  const commit = (cmd: Command): void => {
+    const next = history.push(cmd, state.project!);
+    doneIds.push(nextStepId++);
+    version += 1;
+    if (doneIds.length > HISTORY_LIMIT) floorId = doneIds.shift()!;
+    undoneIds = [];
+    set({ project: next, ...historyPatch() });
+  };
+
+  /** Runs an edit of the current map; errors only set `error` (a save may be in flight). */
+  const edit = (prefix: string, make: (project: Project, mapId: string) => Command | null): boolean => {
+    const project = state.project;
+    const mapId = state.currentMapId;
+    if (state.mode !== "idle" && state.mode !== "saving") return false;
+    if (project === null || mapId === null || !Object.hasOwn(project.maps, mapId)) return false;
+    try {
+      const cmd = make(project, mapId);
+      if (cmd === null) return false;
+      commit(cmd);
+    } catch (e) {
+      set({ error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
+      return false;
+    }
+    return true;
   };
 
   const fail = (prefix: string, e: unknown): false => {
@@ -315,30 +370,66 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       // While the folder dialog or a load is pending the project must stay as it
       // is (see `version`). Strokes during a save stay unsaved: savedId is the id
       // captured when the save started.
-      if (state.mode === "dialog" || state.mode === "loading" || project === null || mapId === null || edits.length === 0) return false;
+      if (state.mode === "dialog" || state.mode === "loading" || state.mode === "playing" || project === null || mapId === null || edits.length === 0) return false;
       const map = project.maps[mapId];
       if (map === undefined) return false;
-      let next: Project;
       try {
         paintCommand(mapId, edits, map); // validates every edit, throws on bad ones
         const effective = effectiveEdits(project, mapId, edits);
         if (effective.length === 0) return false;
-        next = history.push(paintCommand(mapId, effective, map), project);
+        commit(paintCommand(mapId, effective, map));
       } catch (e) {
         // Only the error: a save may be in flight, and the mode must stay as it is.
         set({ error: `Could not paint there. ${ensurePeriod(capitalize(describe(e)))}` });
         return false;
       }
-      doneIds.push(nextStepId++);
-      version += 1;
-      if (doneIds.length > HISTORY_LIMIT) floorId = doneIds.shift()!;
-      undoneIds = [];
-      set({ project: next, ...historyPatch() });
       return true;
     },
 
+    placeObjectAt(x, y) {
+      const tool = state.tool;
+      if (tool !== "spawn" && tool !== "npc") return false;
+      return edit("Could not place that there. ", (project, mapId) => {
+        const map = project.maps[mapId]!;
+        if (tool === "spawn") {
+          return placeObjectCommand(mapId, { id: "spawn", kind: "spawn", x, y, props: {} }, project);
+        }
+        const id = nextNpcId(map);
+        return placeObjectCommand(
+          mapId,
+          { id, kind: "npc", x, y, props: { name: `NPC ${id.slice("npc-".length)}` } },
+          project,
+        );
+      });
+    },
+
+    removeObjectAt(x, y) {
+      return edit("Could not place that there. ", (project, mapId) => {
+        const found = objectAt(project.maps[mapId]!, x, y);
+        return found === undefined ? null : removeObjectCommand(mapId, found.id, project);
+      });
+    },
+
+    setTileSolid(tile, solid) {
+      return edit("Could not change that tile. ", (project) => setSolidCommand(tile, solid, project));
+    },
+
+    toggleShowSolid() {
+      set({ showSolid: !state.showSolid });
+    },
+
+    play() {
+      if (!canPlay(state)) return false;
+      set({ mode: "playing" });
+      return true;
+    },
+
+    stopPlay() {
+      if (state.mode === "playing") set({ mode: "idle" });
+    },
+
     undo() {
-      if (state.project === null || !history.canUndo) return;
+      if (state.mode === "playing" || state.project === null || !history.canUndo) return;
       const next = history.undo(state.project);
       undoneIds.push(doneIds.pop()!);
       version += 1;
@@ -346,7 +437,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     },
 
     redo() {
-      if (state.project === null || !history.canRedo) return;
+      if (state.mode === "playing" || state.project === null || !history.canRedo) return;
       const next = history.redo(state.project);
       doneIds.push(undoneIds.pop()!);
       version += 1;

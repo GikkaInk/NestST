@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MANIFEST_FILE, loadProject } from "@nestst/core";
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
-import { createEditorStore, strokeTile } from "./editorStore.js";
+import { canPlay, createEditorStore, isBusy, strokeTile } from "./editorStore.js";
 import type { OpenedFolder, ProjectSession } from "./editorStore.js";
 
 /** Session whose pickers return the queued folders in order; `null` = cancelled. */
@@ -772,5 +772,193 @@ describe("modes during a save", () => {
     expect(await store.save()).toBe(true);
     expect(backupPaths(storage).length).toBe(2);
     expect(store.getState().notice).toBeNull();
+  });
+});
+
+const objectsOf = (store: ReturnType<typeof createEditorStore>) => {
+  const s = store.getState();
+  return s.project!.maps[s.currentMapId!]!.objects;
+};
+
+describe("objects, solid tiles and play", () => {
+  it("places an NPC named after nextNpcId; dirty; undo removes it", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    expect(store.getState().tool).toBe("npc");
+    expect(store.placeObjectAt(2, 3)).toBe(true);
+    expect(store.placeObjectAt(4, 3)).toBe(true);
+    const npcs = objectsOf(store).filter((o) => o.kind === "npc");
+    expect(npcs.map((o) => o.id)).toEqual(["npc-1", "npc-2"]);
+    expect(npcs[1]!.props).toMatchObject({ name: "NPC 2" });
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    expect(objectsOf(store).filter((o) => o.kind === "npc").length).toBe(1);
+    store.undo();
+    expect(objectsOf(store).filter((o) => o.kind === "npc").length).toBe(0);
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  it("a second spawn moves the first; undo brings it back", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("spawn");
+    expect(store.placeObjectAt(1, 1)).toBe(true);
+    expect(store.placeObjectAt(5, 5)).toBe(true);
+    const spawns = () => objectsOf(store).filter((o) => o.kind === "spawn");
+    expect(spawns().map((o) => [o.x, o.y])).toEqual([[5, 5]]);
+    store.undo();
+    expect(spawns().map((o) => [o.x, o.y])).toEqual([[1, 1]]);
+    store.redo();
+    expect(spawns().map((o) => [o.x, o.y])).toEqual([[5, 5]]);
+  });
+
+  it("removeObjectAt removes with undo; false when nothing is there", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    store.placeObjectAt(2, 2);
+    expect(store.removeObjectAt(0, 0)).toBe(false);
+    expect(store.getState().error).toBeNull();
+    expect(store.removeObjectAt(2, 2)).toBe(true);
+    expect(objectsOf(store).length).toBe(0);
+    store.undo();
+    expect(objectsOf(store).length).toBe(1);
+  });
+
+  it("placeObjectAt is false for brush/eraser tools", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.placeObjectAt(1, 1)).toBe(false);
+    expect(objectsOf(store).length).toBe(0);
+  });
+
+  it("setTileSolid changes the manifest through history", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.setTileSolid(3, true)).toBe(true);
+    expect(store.getState().project!.manifest.solidTiles).toContain(3);
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    expect(store.getState().project!.manifest.solidTiles).not.toContain(3);
+    expect(store.getState().dirty).toBe(false);
+    store.redo();
+    expect(store.getState().project!.manifest.solidTiles).toContain(3);
+  });
+
+  it("a command error goes to error with its prefix and leaves the project alone", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    store.placeObjectAt(2, 2);
+    const before = store.getState().project;
+    expect(store.placeObjectAt(2, 2)).toBe(false);
+    expect(store.getState().error).toMatch(/^Could not place that there\. /);
+    expect(store.getState().project).toBe(before);
+    store.dismissError();
+    expect(store.setTileSolid(3, false)).toBe(false);
+    expect(store.getState().error).toMatch(/^Could not change that tile\. /);
+    expect(store.getState().project).toBe(before);
+    expect(store.getState().mode).toBe("idle");
+  });
+
+  it("a command error mid-save keeps mode saving", async () => {
+    const storage = new GatedStorage();
+    const { store } = await storeWithNewProject(storage);
+    store.selectTool("npc");
+    store.placeObjectAt(2, 2);
+    storage.hold();
+    const saving = store.save();
+    expect(store.placeObjectAt(2, 2)).toBe(false);
+    expect(store.setTileSolid(3, false)).toBe(false);
+    expect(store.getState().error).not.toBeNull();
+    expect(store.getState().mode).toBe("saving");
+    // a valid edit is allowed during a save and stays unsaved
+    expect(store.placeObjectAt(6, 6)).toBe(true);
+    storage.release();
+    expect(await saving).toBe(true);
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it("object edits are refused during a folder dialog", async () => {
+    let release!: (f: OpenedFolder | null) => void;
+    const first = folder(new MemoryStorage());
+    const session: ProjectSession = {
+      pickNew: async () => first,
+      pickOpen: () => new Promise((r) => (release = r)),
+    };
+    const store = createEditorStore(session);
+    await store.newProject("A");
+    store.selectTool("npc");
+    store.placeObjectAt(2, 2);
+    const pending = store.open();
+    expect(store.getState().mode).toBe("dialog");
+    expect(store.placeObjectAt(5, 5)).toBe(false);
+    expect(store.removeObjectAt(2, 2)).toBe(false);
+    expect(store.setTileSolid(3, true)).toBe(false);
+    expect(objectsOf(store).length).toBe(1);
+    release(null);
+    await pending;
+  });
+
+  it("canPlay needs a spawn, a project and idle mode", async () => {
+    const storage = new GatedStorage();
+    const { store } = await storeWithNewProject(storage);
+    expect(canPlay(createEditorStore(fakeSession()).getState())).toBe(false);
+    expect(canPlay(store.getState())).toBe(false);
+    expect(store.play()).toBe(false);
+    expect(store.getState().mode).toBe("idle");
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    expect(canPlay(store.getState())).toBe(true);
+    storage.hold();
+    const saving = store.save();
+    expect(canPlay(store.getState())).toBe(false);
+    expect(store.play()).toBe(false);
+    storage.release();
+    await saving;
+    expect(canPlay(store.getState())).toBe(true);
+  });
+
+  it("play blocks edits and stopPlay restores canUndo/canRedo/dirty exactly", async () => {
+    const { store } = await storeWithNewProject();
+    store.paintStroke([ground(0, 0, 2)]);
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    expect(await store.save()).toBe(true);
+    store.paintStroke([ground(1, 0, 2)]);
+    store.undo(); // clean again, with something to redo
+    const snap = () => {
+      const s = store.getState();
+      return { canUndo: s.canUndo, canRedo: s.canRedo, dirty: s.dirty };
+    };
+    const before = snap();
+    expect(before).toEqual({ canUndo: true, canRedo: true, dirty: false });
+    const project = store.getState().project;
+
+    expect(store.play()).toBe(true);
+    expect(store.getState().mode).toBe("playing");
+    expect(isBusy(store.getState())).toBe(true);
+    store.selectTool("npc");
+    expect(store.paintStroke([ground(2, 2, 3)])).toBe(false);
+    expect(store.placeObjectAt(4, 4)).toBe(false);
+    expect(store.removeObjectAt(1, 1)).toBe(false);
+    expect(store.setTileSolid(3, true)).toBe(false);
+    expect(await store.save()).toBe(false);
+    expect(await store.newProject("B")).toBe(false);
+    expect(await store.open()).toBe(false);
+    store.undo();
+    store.redo();
+    expect(store.play()).toBe(false);
+    expect(store.getState().project).toBe(project);
+    expect(snap()).toEqual(before);
+
+    store.stopPlay();
+    expect(store.getState().mode).toBe("idle");
+    expect(snap()).toEqual(before);
+    expect(store.getState().project).toBe(project);
+    store.redo();
+    expect(tilesOf(store)[1]).toBe(2);
+  });
+
+  it("showSolid defaults to true and toggles", async () => {
+    const store = createEditorStore(fakeSession());
+    expect(store.getState().showSolid).toBe(true);
+    store.toggleShowSolid();
+    expect(store.getState().showSolid).toBe(false);
   });
 });
