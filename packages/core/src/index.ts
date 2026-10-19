@@ -18,3 +18,12 @@ export type { Project, BackupFile, SaveOptions } from "./project.js";
 export { paintTiles, paintCommand, mergeCommands } from "./mapOps.js";
 export type { TileEdit, Command } from "./mapOps.js";
 export { History } from "./history.js";
+export {
+  isSolidTile,
+  nextNpcId,
+  objectAt,
+  setSolidCommand,
+  placeObjectCommand,
+  moveObjectCommand,
+  removeObjectCommand,
+} from "./objectOps.js";
