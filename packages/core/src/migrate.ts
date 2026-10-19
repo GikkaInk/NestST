@@ -23,6 +23,17 @@ export const MIGRATIONS: MigrationStep[] = [
     }),
   },
   {
+    kind: "manifest",
+    from: 3,
+    to: 4,
+    run: (raw) => ({
+      ...raw,
+      schemaVersion: 4,
+      variables: Array.isArray(raw.variables) ? raw.variables : [],
+      dialogs: Array.isArray(raw.dialogs) ? raw.dialogs : [],
+    }),
+  },
+  {
     kind: "map",
     from: 1,
     to: 2,
@@ -46,7 +57,7 @@ export function migrateToVersion(
   file: string | undefined,
   target: number,
 ): unknown {
-  const what = `${file ? `file ${file}: ` : ""}${kind === "map" ? "map" : "project manifest"}`;
+  const what = `${file ? `file ${file}: ` : ""}${kind === "map" ? "map" : kind === "dialog" ? "dialog" : "project manifest"}`;
   const fail = (code: string, text: string): never => {
     throw new NestError(code, `${what}: ${text}`, file);
   };

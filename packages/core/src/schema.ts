@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { NestError, describeFirstIssue, messageForIssue } from "./errors.js";
+import { NestError, describeFirstIssue } from "./errors.js";
+import { MAX_DIALOGS, MAX_VARIABLES, variableDefSchema } from "./dialogSchema.js";
+import { idSchema, intRange, isRecord, safeParseGuarded, schemaVersionSchema, withFile } from "./schemaUtil.js";
+export { FORMAT_VERSIONS } from "./schemaUtil.js";
+export type { FormatKind } from "./schemaUtil.js";
 
-/** Current format version of each file kind. */
-export const FORMAT_VERSIONS = { manifest: 3, map: 2 } as const;
-export type FormatKind = keyof typeof FORMAT_VERSIONS;
 export const MAX_TILE_ID = 65535;
 /** Tiles in the built-in tileset and palette (ids 1..255; 0 is empty). */
 export const BUILTIN_TILE_COUNT = 255;
@@ -11,36 +12,6 @@ export const MAX_MAP_SIZE = 2048;
 export const MAX_LAYERS = 16;
 /** Upper limit of width × height × layers of one map. */
 export const MAX_MAP_CELLS = 4194304;
-
-const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-const ID_MESSAGE =
-  "id must use lowercase Latin letters, digits, \"_\" and \"-\", start with a letter or digit and be at most 64 characters long";
-
-/** Whole number in a range; one clear message for every reason of rejection. */
-function intRange(min: number, max: number) {
-  const message = `must be a whole number from ${min} to ${max}`;
-  const error = (iss: { input?: unknown }) =>
-    iss.input === undefined ? "this field is missing" : message;
-  return z.number({ error }).int({ error }).min(min, { error }).max(max, { error });
-}
-
-/** Device names Windows refuses as file names (`maps/<id>.json` must work everywhere). */
-const RESERVED_ID = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
-const RESERVED_MESSAGE =
-  "id is a reserved device name on Windows (con, prn, aux, nul, com1-com9, lpt1-lpt9); choose another id";
-
-const idSchema = z
-  .string()
-  .regex(ID_PATTERN, { error: ID_MESSAGE })
-  .refine((v) => !RESERVED_ID.test(v), { error: RESERVED_MESSAGE });
-
-const schemaVersionSchema = <K extends FormatKind>(kind: K) =>
-  z.literal(FORMAT_VERSIONS[kind], {
-    error: (iss) =>
-      iss.input === undefined
-        ? "this field is missing"
-        : `format version must be ${FORMAT_VERSIONS[kind]}`,
-  });
 
 const TILE_MESSAGE = `must be a whole number from 0 to ${MAX_TILE_ID}`;
 
@@ -108,6 +79,11 @@ export const manifestMapEntrySchema = z.looseObject({
   file: z.string().min(1),
 });
 
+export const manifestDialogEntrySchema = z.looseObject({
+  id: idSchema,
+  file: z.string().min(1),
+});
+
 export const projectManifestSchema = z.looseObject({
   schemaVersion: schemaVersionSchema("manifest"),
   name: z.string().min(1).max(200),
@@ -119,6 +95,8 @@ export const projectManifestSchema = z.looseObject({
   maps: z.array(manifestMapEntrySchema),
   startMapId: idSchema,
   solidTiles: solidTilesSchema,
+  variables: z.array(variableDefSchema).max(MAX_VARIABLES),
+  dialogs: z.array(manifestDialogEntrySchema).max(MAX_DIALOGS),
 });
 
 export type TileLayer = z.infer<typeof tileLayerSchema>;
@@ -126,41 +104,12 @@ export type MapObject = z.infer<typeof mapObjectSchema>;
 export type GameMap = z.infer<typeof gameMapSchema>;
 export type ProjectManifest = z.infer<typeof projectManifestSchema>;
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function withFile(file: string | undefined, where: string): string {
-  return file ? `file ${file}: ${where}` : where;
-}
-
 function mapLabel(raw: unknown): string {
   if (isRecord(raw)) {
     if (typeof raw.name === "string" && raw.name !== "") return `in map "${raw.name}"`;
     if (typeof raw.id === "string" && raw.id !== "") return `in map "${raw.id}"`;
   }
   return "in map";
-}
-
-/**
- * `safeParse` that never lets an engine error out: if the data is so damaged
- * that validation itself runs out of stack, report it as a NestError.
- */
-function safeParseGuarded<T extends z.ZodType>(
-  schema: T,
-  raw: unknown,
-  code: string,
-  where: string,
-  file: string | undefined,
-): ReturnType<T["safeParse"]> {
-  try {
-    return schema.safeParse(raw, { error: messageForIssue }) as ReturnType<T["safeParse"]>;
-  } catch (e) {
-    if (e instanceof RangeError) {
-      throw new NestError(code, `${where}: the data is too damaged to read`, file);
-    }
-    throw e;
-  }
 }
 
 function tooBig(where: string, cells: number, file: string | undefined): NestError {
@@ -267,6 +216,28 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
       throw new NestError(
         "invalid_manifest",
         `${where}, field maps[${i}].file: for map "${entry.id}" the file must be "${expectedFile}", but it is "${entry.file}"`,
+        file,
+      );
+    }
+  });
+  const varIds = new Set<string>();
+  for (const v of manifest.variables) {
+    if (varIds.has(v.id)) {
+      throw new NestError("invalid_manifest", `${where}: variable "${v.id}" is listed more than once in variables`, file);
+    }
+    varIds.add(v.id);
+  }
+  const dialogIds = new Set<string>();
+  manifest.dialogs.forEach((entry, i) => {
+    if (dialogIds.has(entry.id)) {
+      throw new NestError("invalid_manifest", `${where}: dialog "${entry.id}" is listed more than once in dialogs`, file);
+    }
+    dialogIds.add(entry.id);
+    const expectedFile = `dialogs/${entry.id}.json`;
+    if (entry.file !== expectedFile) {
+      throw new NestError(
+        "invalid_manifest",
+        `${where}, field dialogs[${i}].file: for dialog "${entry.id}" the file must be "${expectedFile}", but it is "${entry.file}"`,
         file,
       );
     }

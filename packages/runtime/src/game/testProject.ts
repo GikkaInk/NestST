@@ -27,14 +27,17 @@ export function makeProject(opts: {
   };
   return {
     manifest: {
-      schemaVersion: 3,
+      schemaVersion: 4,
       name: "T",
       resolution: { width: 320, height: 240 },
       tileSize: 16,
       maps: [{ id: "main", file: "maps/main.json" }],
       startMapId: "main",
       solidTiles: opts.solidTiles ?? [9],
+      variables: [],
+      dialogs: [],
     },
     maps: { main: map },
+    dialogs: {},
   };
 }

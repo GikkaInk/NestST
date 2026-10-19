@@ -82,7 +82,7 @@ describe("painting keeps objects", () => {
     expect(painted.objects).toEqual(before);
     expect(painted.objects).toBe(map.objects);
     const cmd = paintCommand("town", [{ layerId: "ground", x: 1, y: 0, tile: 7 }], map);
-    const project = { manifest: createEmptyProject("P").manifest, maps: { town: map } };
+    const project = { manifest: createEmptyProject("P").manifest, maps: { town: map }, dialogs: {} };
     expect(cmd.apply(project).maps.town!.objects).toEqual(before);
     expect(map.objects).toEqual(before);
   });

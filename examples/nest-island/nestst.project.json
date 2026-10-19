@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "Nest Island",
   "resolution": {
     "width": 1280,
@@ -16,5 +16,7 @@
   "solidTiles": [
     13,
     26
-  ]
+  ],
+  "variables": [],
+  "dialogs": []
 }

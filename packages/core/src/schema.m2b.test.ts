@@ -18,13 +18,15 @@ function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function validManifest(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     name: "Game",
     resolution: { width: 640, height: 360 },
     tileSize: 16,
     maps: [{ id: "town", file: "maps/town.json" }],
     startMapId: "town",
     solidTiles: [3, 7],
+    variables: [],
+    dialogs: [],
     ...over,
   };
 }
@@ -43,7 +45,7 @@ const obj = (id: string, kind: string, x: number, y: number) => ({ id, kind, x, 
 
 describe("manifest v3", () => {
   it("has current versions", () => {
-    expect(FORMAT_VERSIONS).toEqual({ manifest: 3, map: 2 });
+    expect(FORMAT_VERSIONS).toEqual({ manifest: 4, map: 2, dialog: 1 });
     expect(MAX_MAP_CELLS).toBe(4194304);
   });
 

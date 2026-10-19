@@ -43,7 +43,7 @@ describe("migration 1 to 2", () => {
 
   it("bumps the manifest to the current version", () => {
     const out = migrateRaw("manifest", v1Manifest());
-    expect(out).toEqual({ ...v1Manifest(), schemaVersion: 3, solidTiles: [] });
+    expect(out).toEqual({ ...v1Manifest(), schemaVersion: 4, solidTiles: [], variables: [], dialogs: [] });
   });
 
   it("does not mutate the input", () => {
@@ -59,7 +59,7 @@ describe("migration 1 to 2", () => {
     expect(() => migrateRaw("map", { ...v1Map(), schemaVersion: 3 })).toThrow(
       expect.objectContaining({ code: "schema_too_new" }),
     );
-    expect(() => migrateRaw("manifest", { ...v1Manifest(), schemaVersion: 4 })).toThrow(
+    expect(() => migrateRaw("manifest", { ...v1Manifest(), schemaVersion: 5 })).toThrow(
       expect.objectContaining({ code: "schema_too_new" }),
     );
   });

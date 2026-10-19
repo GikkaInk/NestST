@@ -1,4 +1,6 @@
 import { NestError } from "./errors.js";
+import { parseDialog } from "./dialogSchema.js";
+import type { Dialog } from "./dialogSchema.js";
 import { migrateRaw } from "./migrate.js";
 import { FORMAT_VERSIONS, parseManifest, parseMap } from "./schema.js";
 import type { GameMap, ProjectManifest } from "./schema.js";
@@ -26,6 +28,8 @@ export interface Project {
   manifest: ProjectManifest;
   /** Maps by id; every manifest entry has exactly one map here and vice versa. */
   maps: Record<string, GameMap>;
+  /** Dialogs by id; same one-to-one rule with `manifest.dialogs` as for maps. */
+  dialogs: Record<string, Dialog>;
   /** Original text of the files that were migrated on load; absent when none were. */
   migratedFrom?: BackupFile[];
 }
@@ -87,8 +91,10 @@ export function createEmptyProject(name: string): Project {
     maps: [{ id: DEFAULT_MAP_ID, file: `maps/${DEFAULT_MAP_ID}.json` }],
     startMapId: DEFAULT_MAP_ID,
     solidTiles: [],
+    variables: [],
+    dialogs: [],
   };
-  return { manifest, maps: { [DEFAULT_MAP_ID]: map } };
+  return { manifest, maps: { [DEFAULT_MAP_ID]: map }, dialogs: {} };
 }
 
 function serialize(data: unknown): string {
@@ -131,7 +137,7 @@ export function serializeMap(map: GameMap): string {
 
 /**
  * Saves the project. Everything is validated first, so nothing is written if
- * the project is invalid. Then all maps are written, and the manifest LAST.
+ * the project is invalid. Then all maps and dialogs are written, and the manifest LAST.
  *
  * Guarantee after an interrupted save (write error, crash): every file is
  * either entirely old or entirely new, never half-written (that part is the
@@ -155,6 +161,16 @@ export async function saveProject(
       );
     }
   }
+  const listedDialogs = new Set(manifest.dialogs.map((e) => e.id));
+  for (const key of Object.keys(project.dialogs)) {
+    if (!listedDialogs.has(key)) {
+      throw new NestError(
+        "invalid_project",
+        `dialog "${key}" is not listed in ${MANIFEST_FILE}`,
+        MANIFEST_FILE,
+      );
+    }
+  }
   const files: Array<{ path: string; text: string }> = [];
   for (const entry of manifest.maps) {
     const map = Object.hasOwn(project.maps, entry.id) ? project.maps[entry.id] : undefined;
@@ -174,6 +190,25 @@ export async function saveProject(
       );
     }
     files.push({ path: entry.file, text: serializeMap(parsed) });
+  }
+  for (const entry of manifest.dialogs) {
+    const dialog = Object.hasOwn(project.dialogs, entry.id) ? project.dialogs[entry.id] : undefined;
+    if (dialog === undefined) {
+      throw new NestError(
+        "invalid_project",
+        `${MANIFEST_FILE} lists dialog "${entry.id}", but the project has no such dialog`,
+        MANIFEST_FILE,
+      );
+    }
+    const parsed = parseDialog(dialog, entry.file);
+    if (parsed.id !== entry.id) {
+      throw new NestError(
+        "invalid_project",
+        `file ${entry.file}: dialog id "${parsed.id}" does not match "${entry.id}" in ${MANIFEST_FILE}`,
+        entry.file,
+      );
+    }
+    files.push({ path: entry.file, text: serialize(parsed) });
   }
   files.push({ path: MANIFEST_FILE, text: serialize(manifest) });
 
@@ -226,10 +261,10 @@ async function readJson(
   }
 }
 
-/** Reads the manifest, then every map; each file goes through `migrateRaw` and its parser. */
+/** Reads the manifest, then every map and dialog; each file goes through `migrateRaw` and its parser. */
 export async function loadProject(storage: ProjectStorage): Promise<Project> {
   const migratedFrom: BackupFile[] = [];
-  const noteIfMigrated = (kind: "manifest" | "map", path: string, r: { text: string; json: unknown }) => {
+  const noteIfMigrated = (kind: "manifest" | "map" | "dialog", path: string, r: { text: string; json: unknown }) => {
     const v = (r.json as { schemaVersion?: unknown } | null)?.schemaVersion;
     if (typeof v === "number" && v < FORMAT_VERSIONS[kind]) migratedFrom.push({ path, text: r.text });
   };
@@ -261,5 +296,23 @@ export async function loadProject(storage: ProjectStorage): Promise<Project> {
     noteIfMigrated("map", entry.file, raw);
     maps[entry.id] = map;
   }
-  return migratedFrom.length > 0 ? { manifest, maps, migratedFrom } : { manifest, maps };
+  const dialogs: Record<string, Dialog> = {};
+  for (const entry of manifest.dialogs) {
+    const raw = await readJson(
+      storage,
+      entry.file,
+      `file ${entry.file} was not found, but ${MANIFEST_FILE} lists it for dialog "${entry.id}"`,
+    );
+    const dialog = parseDialog(migrateRaw("dialog", raw.json, undefined, entry.file), entry.file);
+    if (dialog.id !== entry.id) {
+      throw new NestError(
+        "invalid_dialog",
+        `file ${entry.file}: dialog id "${dialog.id}" does not match "${entry.id}" in ${MANIFEST_FILE}`,
+        entry.file,
+      );
+    }
+    noteIfMigrated("dialog", entry.file, raw);
+    dialogs[entry.id] = dialog;
+  }
+  return migratedFrom.length > 0 ? { manifest, maps, dialogs, migratedFrom } : { manifest, maps, dialogs };
 }

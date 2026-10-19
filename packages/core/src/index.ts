@@ -10,6 +10,19 @@ export {
   parseManifest,
 } from "./schema.js";
 export type { FormatKind, TileLayer, MapObject, GameMap, ProjectManifest } from "./schema.js";
+export {
+  MAX_VARIABLES,
+  MAX_DIALOGS,
+  MAX_DIALOG_NODES,
+  MAX_CHOICE_OPTIONS,
+  MAX_SAY_TEXT,
+  MAX_OPTION_TEXT,
+  MAX_SPEAKER,
+  MAX_VARIABLE_NAME,
+  MAX_VALUE,
+  parseDialog,
+} from "./dialogSchema.js";
+export type { VariableDef, Condition, CompareOp, DialogNode, Dialog } from "./dialogSchema.js";
 export { migrateRaw, MIGRATIONS } from "./migrate.js";
 export type { MigrationStep } from "./migrate.js";
 export type { ProjectStorage } from "./storage.js";

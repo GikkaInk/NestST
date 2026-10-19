@@ -48,6 +48,7 @@ describe("migrateRaw", () => {
     expect(MIGRATIONS.map((s) => [s.kind, s.from, s.to])).toEqual([
       ["manifest", 1, 2],
       ["manifest", 2, 3],
+      ["manifest", 3, 4],
       ["map", 1, 2],
     ]);
   });
@@ -80,7 +81,7 @@ describe("migrateRaw", () => {
 
   it("v0 manifest -> fake step -> parseManifest succeeds, unknown key survives", () => {
     const out = parseManifest(migrateRaw("manifest", v0Manifest(), [step(0, 1, "manifest"), ...MIGRATIONS]));
-    expect(out.schemaVersion).toBe(3);
+    expect(out.schemaVersion).toBe(4);
     expect(out.futureKey).toBe("x");
   });
 

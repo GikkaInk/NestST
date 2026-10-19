@@ -256,7 +256,7 @@ describe("end-to-end project on disk", () => {
   });
 });
 
-describe("v1 to v3 migration round trip", () => {
+describe("v1 to v4 migration round trip", () => {
   const FIXTURES = fileURLToPath(new URL("./fixtures/v1/", import.meta.url));
   const FILES = [MANIFEST_FILE, "maps/main.json"];
 
@@ -266,7 +266,7 @@ describe("v1 to v3 migration round trip", () => {
     return out;
   }
 
-  it("backs up v1 files byte for byte, saves v2 and loads it without migration", async () => {
+  it("backs up v1 files byte for byte, saves v4 and loads it without migration", async () => {
     const originals = await v1Files();
     const storage = new MemoryStorage(originals);
     const loaded = await loadProject(storage);
@@ -281,7 +281,7 @@ describe("v1 to v3 migration round trip", () => {
 
     const reloaded = await loadProject(storage);
     expect(reloaded.migratedFrom ?? []).toEqual([]);
-    expect(reloaded.manifest.schemaVersion).toBe(3);
+    expect(reloaded.manifest.schemaVersion).toBe(4);
     expect(reloaded.manifest.solidTiles).toEqual([]);
     expect(reloaded.maps["main"]!.schemaVersion).toBe(2);
     expect(reloaded.maps["main"]!.layers.map((l) => l.tiles)).toEqual(
@@ -291,26 +291,26 @@ describe("v1 to v3 migration round trip", () => {
     expect(reloaded.maps["main"]!.layers.map((l) => l.tiles)).toEqual(original.layers.map((l) => l.tiles));
   });
 
-  it("the example project is saved as v3 and loads without migration", async () => {
+  it("the example project is saved as v4 and loads without migration", async () => {
     const project = await loadProject(new NodeFsStorage(EXAMPLE));
     expect(project.migratedFrom ?? []).toEqual([]);
-    expect(project.manifest.schemaVersion).toBe(3);
+    expect(project.manifest.schemaVersion).toBe(4);
     expect(project.manifest.solidTiles).toEqual([13, 26]);
     expect(project.maps[project.manifest.startMapId]!.schemaVersion).toBe(2);
   });
 });
 
-describe("v2 to v3 migration round trip", () => {
+describe("v2 to v4 migration round trip", () => {
   const FIXTURES = fileURLToPath(new URL("./fixtures/v2/", import.meta.url));
   const FILES = [MANIFEST_FILE, "maps/main.json"];
 
-  it("backs up the v2 manifest byte for byte, saves v3 and loads it without migration", async () => {
+  it("backs up the v2 manifest byte for byte, saves v4 and loads it without migration", async () => {
     const originals: Record<string, string> = {};
     for (const f of FILES) originals[f] = await readFile(join(FIXTURES, f), "utf8");
     const storage = new MemoryStorage(originals);
     const loaded = await loadProject(storage);
     expect(loaded.migratedFrom).toBeDefined();
-    expect(loaded.manifest.schemaVersion).toBe(3);
+    expect(loaded.manifest.schemaVersion).toBe(4);
     expect(loaded.manifest.solidTiles).toEqual([]);
 
     const now = new Date(Date.UTC(2026, 9, 19, 12, 30, 45));
@@ -321,7 +321,7 @@ describe("v2 to v3 migration round trip", () => {
 
     const reloaded = await loadProject(storage);
     expect(reloaded.migratedFrom ?? []).toEqual([]);
-    expect(reloaded.manifest.schemaVersion).toBe(3);
+    expect(reloaded.manifest.schemaVersion).toBe(4);
     expect(reloaded.maps["main"]).toEqual(loaded.maps["main"]);
   });
 });

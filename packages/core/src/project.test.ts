@@ -68,13 +68,15 @@ describe("createEmptyProject", () => {
   it("builds the default project", () => {
     const p = createEmptyProject("  Моя игра  ");
     expect(p.manifest).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 4,
       name: "Моя игра",
       resolution: { width: 1280, height: 720 },
       tileSize: 32,
       maps: [{ id: "main", file: "maps/main.json" }],
       startMapId: "main",
       solidTiles: [],
+      variables: [],
+      dialogs: [],
     });
     expect(Object.keys(p.maps)).toEqual(["main"]);
     const map = p.maps.main!;

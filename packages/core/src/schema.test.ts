@@ -23,7 +23,7 @@ function validMap(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 function validManifest(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     name: "Моя игра",
     resolution: { width: 640, height: 360 },
     tileSize: 16,
@@ -33,6 +33,8 @@ function validManifest(over: Record<string, unknown> = {}): Record<string, unkno
     ],
     startMapId: "town",
     solidTiles: [],
+    variables: [],
+    dialogs: [],
     ...over,
   };
 }
