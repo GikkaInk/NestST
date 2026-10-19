@@ -98,7 +98,6 @@ describe("objectOps", () => {
     expect((err as NestError).message).toContain("npc-1");
     expect((err as NestError).message).toContain("(3, 2)");
     expectInvalid(p, () => setSolidCommand(2, true, p));
-    expect(setSolidCommand(2, false, p).apply(p).manifest.solidTiles).toEqual([]);
   });
 
   it("refuses a busy cell", () => {
@@ -153,13 +152,86 @@ describe("objectOps", () => {
     expect(add.label).toBe("Mark tile as solid");
     p = add.apply(p);
     expect(p.manifest.solidTiles).toEqual([2, 3, 5]);
-    expect(setSolidCommand(3, true, p).apply(p).manifest.solidTiles).toEqual([2, 3, 5]);
     expect(isSolidTile(p.manifest, 3)).toBe(true);
     expect(isSolidTile(p.manifest, 4)).toBe(false);
     const off = setSolidCommand(3, false, p);
     expect(off.apply(p).manifest.solidTiles).toEqual([2, 5]);
     expect(off.revert(off.apply(p)).manifest.solidTiles).toEqual([2, 3, 5]);
-    expect(add.revert(add.apply(makeProject([5, 2]))).manifest.solidTiles).toEqual([5, 2]);
+    expect(add.revert(p).manifest.solidTiles).toEqual([2, 5]);
+  });
+
+  it("setSolid that changes nothing is refused", () => {
+    const p = makeProject([2]);
+    expectInvalid(p, () => setSolidCommand(2, true, p));
+    expectInvalid(p, () => setSolidCommand(3, false, p));
+  });
+
+  it("setSolid round trip keeps objects and their identity", () => {
+    const p = withObjects(makeProject(), [npc("npc-1", 1, 1), spawn("spawn", 0, 0)]);
+    const on = setSolidCommand(2, true, p).apply(p);
+    expect(on.maps.town).toBe(p.maps.town);
+    const off = setSolidCommand(2, false, on).apply(on);
+    const again = setSolidCommand(2, true, off).apply(off);
+    expect(again.manifest.solidTiles).toEqual([2]);
+    expect(again.maps.town!.objects).toBe(p.maps.town!.objects);
+  });
+
+  it("move onto its own cell is allowed", () => {
+    const p = withObjects(makeProject(), [npc("npc-1", 1, 1)]);
+    const cmd = moveObjectCommand("town", "npc-1", 1, 1, p);
+    expect(cmd.apply(p).maps.town!.objects).toEqual([npc("npc-1", 1, 1)]);
+  });
+
+  it("removes the only spawn and undo restores it", () => {
+    const p = withObjects(makeProject(), [spawn("spawn", 0, 0)]);
+    const cmd = removeObjectCommand("town", "spawn", p);
+    expect(cmd.label).toBe("Remove spawn");
+    const removed = cmd.apply(p);
+    expect(removed.maps.town!.objects).toEqual([]);
+    expect(cmd.revert(removed).maps.town!.objects).toEqual([spawn("spawn", 0, 0)]);
+  });
+
+  it("apply and revert keep changes made to the project meanwhile", () => {
+    const p = withObjects(makeProject(), [npc("npc-1", 1, 1), spawn("spawn", 0, 0)]);
+    const other = (q: Project): Project => withObjects(q, [...q.maps.town!.objects, npc("npc-9", 3, 0)]);
+    const ids = (q: Project) => q.maps.town!.objects.map((o) => o.id).sort();
+
+    const place = placeObjectCommand("town", npc("npc-2", 2, 2), p);
+    const placed = other(place.apply(p));
+    expect(ids(place.revert(placed))).toEqual(["npc-1", "npc-9", "spawn"]);
+
+    const sp = placeObjectCommand("town", spawn("s2", 1, 0), p);
+    const spApplied = sp.apply(other(p));
+    expect(ids(spApplied)).toEqual(["npc-1", "npc-9", "s2"]);
+    expect(ids(sp.revert(spApplied))).toEqual(["npc-1", "npc-9", "spawn"]);
+
+    const mv = moveObjectCommand("town", "npc-1", 2, 0, p);
+    const moved = mv.apply(other(p));
+    expect(objectAt(moved.maps.town!, 3, 0)?.id).toBe("npc-9");
+    expect(objectAt(mv.revert(moved).maps.town!, 1, 1)?.id).toBe("npc-1");
+
+    const rm = removeObjectCommand("town", "npc-1", p);
+    const removed = rm.apply(other(p));
+    expect(ids(removed)).toEqual(["npc-9", "spawn"]);
+    expect(ids(rm.revert(removed))).toEqual(["npc-1", "npc-9", "spawn"]);
+
+    const solid = setSolidCommand(2, true, makeProject([5]));
+    const q = { ...p, manifest: { ...p.manifest, solidTiles: [5, 7] } };
+    expect(solid.apply(q).manifest.solidTiles).toEqual([2, 5, 7]);
+    expect(solid.revert(solid.apply(q)).manifest.solidTiles).toEqual([5, 7]);
+  });
+
+  it("apply on a project without the map is invalid_edit", () => {
+    const p = makeProject();
+    const cmd = placeObjectCommand("town", npc("npc-1", 1, 1), p);
+    const { town: _t, ...maps } = p.maps;
+    let err: unknown;
+    try {
+      cmd.apply({ ...p, maps });
+    } catch (e) {
+      err = e;
+    }
+    expect((err as NestError).code).toBe("invalid_edit");
   });
 
   it("nextNpcId fills the smallest gap", () => {

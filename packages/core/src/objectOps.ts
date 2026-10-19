@@ -26,8 +26,22 @@ function getMap(p: Project, mapId: string): GameMap {
   return map;
 }
 
-function withObjects(p: Project, mapId: string, objects: MapObject[]): Project {
-  return { ...p, maps: { ...p.maps, [mapId]: { ...p.maps[mapId]!, objects } } };
+/** Map of `p`, or `invalid_edit` when it is missing (e.g. the project changed since the command was made). */
+function mapOf(p: Project, mapId: string): GameMap {
+  const map = Object.hasOwn(p.maps, mapId) ? p.maps[mapId] : undefined;
+  if (map === undefined) fail(`map "${mapId}" does not exist in the project`);
+  return map!;
+}
+
+function withObjects(p: Project, mapId: string, edit: (objects: MapObject[]) => MapObject[]): Project {
+  const map = mapOf(p, mapId);
+  return { ...p, maps: { ...p.maps, [mapId]: { ...map, objects: edit(map.objects) } } };
+}
+
+function insertAt(objects: MapObject[], index: number, obj: MapObject): MapObject[] {
+  const next = objects.slice();
+  next.splice(Math.min(index, next.length), 0, obj);
+  return next;
 }
 
 /** True when `tile` is listed as impassable in the manifest. */
@@ -84,12 +98,18 @@ export function placeObjectCommand(mapId: string, object: MapObject, before: Pro
   }
   checkCell(map, before.manifest.solidTiles, object.x, object.y, replaced?.id);
   const placed: MapObject = { ...object, props: { ...object.props } };
-  const oldObjects = map.objects.slice();
-  const newObjects = oldObjects.filter((o) => o !== replaced).concat(placed);
+  const replacedAt = replaced === undefined ? -1 : map.objects.indexOf(replaced);
   return {
     label: `Place ${kindName(object.kind)}`,
-    apply: (p) => withObjects(p, mapId, newObjects.slice()),
-    revert: (p) => withObjects(p, mapId, oldObjects.slice()),
+    apply: (p) =>
+      withObjects(p, mapId, (os) =>
+        os.filter((o) => o.id !== replaced?.id && o.id !== placed.id).concat(placed),
+      ),
+    revert: (p) =>
+      withObjects(p, mapId, (os) => {
+        const rest = os.filter((o) => o.id !== placed.id);
+        return replaced === undefined ? rest : insertAt(rest, replacedAt, replaced);
+      }),
   };
 }
 
@@ -104,12 +124,16 @@ export function moveObjectCommand(mapId: string, id: string, x: number, y: numbe
   const map = getMap(before, mapId);
   const obj = findObject(map, id);
   checkCell(map, before.manifest.solidTiles, x, y, id);
-  const oldObjects = map.objects.slice();
-  const newObjects = oldObjects.map((o) => (o === obj ? { ...o, x, y } : o));
+  const from = { x: obj.x, y: obj.y };
+  const relocate = (p: Project, to: { x: number; y: number }): Project =>
+    withObjects(p, mapId, (os) => {
+      if (!os.some((o) => o.id === id)) fail(`object "${id}" does not exist in map "${mapId}"`);
+      return os.map((o) => (o.id === id ? { ...o, x: to.x, y: to.y } : o));
+    });
   return {
     label: `Move ${kindName(obj.kind)}`,
-    apply: (p) => withObjects(p, mapId, newObjects.slice()),
-    revert: (p) => withObjects(p, mapId, oldObjects.slice()),
+    apply: (p) => relocate(p, { x, y }),
+    revert: (p) => relocate(p, from),
   };
 }
 
@@ -117,12 +141,11 @@ export function moveObjectCommand(mapId: string, id: string, x: number, y: numbe
 export function removeObjectCommand(mapId: string, id: string, before: Project): Command {
   const map = getMap(before, mapId);
   const obj = findObject(map, id);
-  const oldObjects = map.objects.slice();
-  const newObjects = oldObjects.filter((o) => o !== obj);
+  const index = map.objects.indexOf(obj);
   return {
     label: `Remove ${kindName(obj.kind)}`,
-    apply: (p) => withObjects(p, mapId, newObjects.slice()),
-    revert: (p) => withObjects(p, mapId, oldObjects.slice()),
+    apply: (p) => withObjects(p, mapId, (os) => os.filter((o) => o.id !== id)),
+    revert: (p) => withObjects(p, mapId, (os) => insertAt(os.filter((o) => o.id !== id), index, obj)),
   };
 }
 
@@ -142,13 +165,16 @@ export function setSolidCommand(tile: number, solid: boolean, before: Project): 
       }
     }
   }
-  const oldList = before.manifest.solidTiles.slice();
-  const rest = oldList.filter((t) => t !== tile);
-  const newList = (solid ? rest.concat(tile) : rest).sort((a, b) => a - b);
-  const label = solid ? "Mark tile as solid" : "Mark tile as passable";
-  const set = (p: Project, list: number[]): Project => ({
-    ...p,
-    manifest: { ...p.manifest, solidTiles: list.slice() },
-  });
-  return { label, apply: (p) => set(p, newList), revert: (p) => set(p, oldList) };
+  const already = isSolidTile(before.manifest, tile);
+  if (solid === already) fail(`tile ${tile} is already ${solid ? "solid" : "passable"}`);
+  const setTile = (p: Project, on: boolean): Project => {
+    const rest = p.manifest.solidTiles.filter((t) => t !== tile);
+    const list = (on ? rest.concat(tile) : rest).sort((a, b) => a - b);
+    return { ...p, manifest: { ...p.manifest, solidTiles: list } };
+  };
+  return {
+    label: solid ? "Mark tile as solid" : "Mark tile as passable",
+    apply: (p) => setTile(p, solid),
+    revert: (p) => setTile(p, !solid),
+  };
 }
