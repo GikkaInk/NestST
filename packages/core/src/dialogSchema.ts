@@ -28,6 +28,8 @@ const BOOLEAN_OPS = new Set(["==", "!="]);
 export const compareOpSchema = z.enum(["==", "!=", ">", "<", ">=", "<="]);
 export type CompareOp = z.infer<typeof compareOpSchema>;
 
+// Variable ids use the project id pattern, so the Windows-reserved device names
+// (con, nul, ...) are refused for variables too. Accepted: it keeps one id rule everywhere.
 export const variableDefSchema = z
   .looseObject({
     id: idSchema,
@@ -140,12 +142,11 @@ const branchNodeSchema = z.looseObject({
   else: nextId,
 });
 
-export const dialogNodeSchema = z.discriminatedUnion("type", [
-  sayNodeSchema,
-  choiceNodeSchema,
-  setNodeSchema,
-  branchNodeSchema,
-]);
+export const dialogNodeSchema = z.discriminatedUnion(
+  "type",
+  [sayNodeSchema, choiceNodeSchema, setNodeSchema, branchNodeSchema],
+  { error: 'node type must be "say", "choice", "set" or "branch"' },
+);
 
 export const dialogSchema = z.looseObject({
   schemaVersion: schemaVersionSchema("dialog"),
@@ -170,6 +171,14 @@ function dialogLabel(raw: unknown): string {
 
 export function parseDialog(raw: unknown, file?: string): Dialog {
   const where = withFile(file, dialogLabel(raw));
+  // Cheap check on the raw data first: zod would parse every node before looking at the limit.
+  if (isRecord(raw) && Array.isArray(raw.nodes) && raw.nodes.length > MAX_DIALOG_NODES) {
+    throw new NestError(
+      "invalid_dialog",
+      `${where}, field nodes: too many nodes: ${raw.nodes.length}, the limit is ${MAX_DIALOG_NODES}`,
+      file,
+    );
+  }
   const res = safeParseGuarded(dialogSchema, raw, "invalid_dialog", where, file);
   if (!res.success) {
     throw new NestError("invalid_dialog", describeFirstIssue(res.error, where), file);

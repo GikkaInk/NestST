@@ -142,8 +142,8 @@ export function serializeMap(map: GameMap): string {
  * Guarantee after an interrupted save (write error, crash): every file is
  * either entirely old or entirely new, never half-written (that part is the
  * job of `ProjectStorage.writeAtomic`). Because the manifest goes last, an
- * interrupted save can leave the OLD manifest next to some NEW maps; each map
- * file is self-contained, so such a mix still loads without errors.
+ * interrupted save can leave the OLD manifest next to some NEW maps or dialogs; each map
+ * and dialog file is self-contained, so such a mix still loads without errors.
  */
 export async function saveProject(
   storage: ProjectStorage,

@@ -199,6 +199,19 @@ export function parseManifest(raw: unknown, file?: string): ProjectManifest {
       ? `in project "${raw.name}"`
       : "in project manifest";
   const where = withFile(file, label);
+  // Cheap check on the raw data first: zod would parse every item before looking at the limit.
+  if (isRecord(raw)) {
+    for (const [field, limit] of [["variables", MAX_VARIABLES], ["dialogs", MAX_DIALOGS]] as const) {
+      const list = raw[field];
+      if (Array.isArray(list) && list.length > limit) {
+        throw new NestError(
+          "invalid_manifest",
+          `${where}, field ${field}: too many items: ${list.length}, the limit is ${limit}`,
+          file,
+        );
+      }
+    }
+  }
   const res = safeParseGuarded(projectManifestSchema, raw, "invalid_manifest", where, file);
   if (!res.success) {
     throw new NestError("invalid_manifest", describeFirstIssue(res.error, where), file);

@@ -57,6 +57,7 @@ describe("dialog migration", () => {
     } catch (e) {
       expect((e as NestError).code).toBe("schema_too_new");
       expect((e as NestError).message).toContain("dialog");
+      expect((e as NestError).message).toContain("dialogs/x.json");
       return;
     }
     throw new Error("expected NestError");

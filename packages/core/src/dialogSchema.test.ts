@@ -91,7 +91,27 @@ describe("parseDialog", () => {
     fails(() => parseDialog(dialog({ start: "c", nodes: [opt("x".repeat(201))] })), "invalid_dialog", "text");
   });
 
+  it("rejects a huge array of invalid nodes quickly with the limit message", () => {
+    const nodes = new Array<null>(1000000).fill(null);
+    const t = performance.now();
+    fails(() => parseDialog(dialog({ nodes })), "invalid_dialog", "too many nodes");
+    expect(performance.now() - t).toBeLessThan(500);
+  });
+
+  it("gives a plain message for an unknown node type", () => {
+    const e = fails(() => parseDialog(dialog({ nodes: [{ id: "a", x: 0, y: 0, type: "jump" }] })), "invalid_dialog", "node type must be");
+    expect(e.message).not.toMatch(/Invalid input|expected|received/i);
+  });
+
+  it("limits dialog name to 200 characters and rejects empty option text", () => {
+    parseDialog(dialog({ name: "x".repeat(200) }));
+    fails(() => parseDialog(dialog({ name: "x".repeat(201) })), "invalid_dialog", "name");
+    const opt = { id: "c", x: 0, y: 0, type: "choice", options: [{ text: "", next: null }] };
+    fails(() => parseDialog(dialog({ start: "c", nodes: [opt] })), "invalid_dialog", "text");
+  });
+
   it("limits speaker to 60 characters", () => {
+    parseDialog(dialog({ nodes: [say("a", null, { speaker: "x".repeat(60) })] }));
     fails(() => parseDialog(dialog({ nodes: [say("a", null, { speaker: "x".repeat(61) })] })), "invalid_dialog", "speaker");
   });
 
@@ -173,6 +193,19 @@ describe("manifest variables and dialogs", () => {
     const ds = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, file: `dialogs/d${i}.json` }));
     parseManifest(manifest({ dialogs: ds(200) }));
     fails(() => parseManifest(manifest({ dialogs: ds(201) })), "invalid_manifest", "dialogs");
+  });
+
+  it("rejects huge arrays of invalid variables and dialogs quickly", () => {
+    for (const field of ["variables", "dialogs"]) {
+      const t = performance.now();
+      fails(() => parseManifest(manifest({ [field]: new Array<null>(1000000).fill(null) })), "invalid_manifest", `field ${field}: too many`);
+      expect(performance.now() - t).toBeLessThan(500);
+    }
+  });
+
+  it("limits variable name to 60 characters", () => {
+    parseManifest(manifest({ variables: [v("a", { name: "x".repeat(60) })] }));
+    fails(() => parseManifest(manifest({ variables: [v("a", { name: "x".repeat(61) })] })), "invalid_manifest", "name");
   });
 
   it("rejects duplicate variable and dialog ids", () => {
