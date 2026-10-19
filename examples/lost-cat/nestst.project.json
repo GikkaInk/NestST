@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 4,
+  "name": "Lost Cat",
+  "resolution": {
+    "width": 1280,
+    "height": 720
+  },
+  "tileSize": 32,
+  "maps": [
+    {
+      "id": "village",
+      "file": "maps/village.json"
+    },
+    {
+      "id": "garden",
+      "file": "maps/garden.json"
+    }
+  ],
+  "startMapId": "village",
+  "solidTiles": [
+    9,
+    10,
+    13,
+    22,
+    27,
+    30
+  ],
+  "variables": [
+    {
+      "id": "quest-started",
+      "name": "Quest started",
+      "type": "flag",
+      "initial": false
+    },
+    {
+      "id": "found-cat",
+      "name": "Found the cat",
+      "type": "flag",
+      "initial": false
+    },
+    {
+      "id": "quest-done",
+      "name": "Quest done",
+      "type": "flag",
+      "initial": false
+    },
+    {
+      "id": "coins",
+      "name": "Coins",
+      "type": "number",
+      "initial": 0
+    }
+  ],
+  "dialogs": [
+    {
+      "id": "mira",
+      "file": "dialogs/mira.json"
+    },
+    {
+      "id": "cat",
+      "file": "dialogs/cat.json"
+    },
+    {
+      "id": "sign",
+      "file": "dialogs/sign.json"
+    }
+  ]
+}

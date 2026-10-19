@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "cat",
+  "name": "Mochi",
+  "start": "check",
+  "nodes": [
+    {
+      "id": "check",
+      "x": 0,
+      "y": 0,
+      "type": "branch",
+      "condition": {
+        "variable": "found-cat",
+        "op": "==",
+        "value": true
+      },
+      "then": "later",
+      "else": "meow"
+    },
+    {
+      "id": "meow",
+      "x": 260,
+      "y": -80,
+      "type": "say",
+      "speaker": "Mochi",
+      "text": "Meow!",
+      "next": "found"
+    },
+    {
+      "id": "found",
+      "x": 520,
+      "y": -80,
+      "type": "set",
+      "variable": "found-cat",
+      "op": "set",
+      "value": true,
+      "next": "purr"
+    },
+    {
+      "id": "purr",
+      "x": 780,
+      "y": -80,
+      "type": "say",
+      "speaker": "Mochi",
+      "text": "Mochi purrs and follows you home. Go back to Mira!",
+      "next": null
+    },
+    {
+      "id": "later",
+      "x": 260,
+      "y": 100,
+      "type": "say",
+      "speaker": "Mochi",
+      "text": "Meow.",
+      "next": null
+    }
+  ]
+}

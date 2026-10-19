@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "id": "mira",
+  "name": "Mira",
+  "start": "check",
+  "nodes": [
+    {
+      "id": "check",
+      "x": 0,
+      "y": 0,
+      "type": "branch",
+      "condition": {
+        "variable": "found-cat",
+        "op": "==",
+        "value": true
+      },
+      "then": "returned",
+      "else": "ask"
+    },
+    {
+      "id": "ask",
+      "x": 260,
+      "y": -170,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Oh no… my cat Mochi ran away to the garden. Could you find her?",
+      "next": "reply"
+    },
+    {
+      "id": "reply",
+      "x": 520,
+      "y": -170,
+      "type": "choice",
+      "options": [
+        {
+          "text": "I will look for her.",
+          "next": "start"
+        },
+        {
+          "text": "Not now.",
+          "next": "hurry"
+        }
+      ]
+    },
+    {
+      "id": "start",
+      "x": 780,
+      "y": -250,
+      "type": "set",
+      "variable": "quest-started",
+      "op": "set",
+      "value": true,
+      "next": "thanks"
+    },
+    {
+      "id": "thanks",
+      "x": 1040,
+      "y": -250,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Thank you! The garden is through the gate to the east.",
+      "next": null
+    },
+    {
+      "id": "hurry",
+      "x": 780,
+      "y": -90,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Please hurry…",
+      "next": null
+    },
+    {
+      "id": "returned",
+      "x": 260,
+      "y": 170,
+      "type": "branch",
+      "condition": {
+        "variable": "quest-done",
+        "op": "==",
+        "value": true
+      },
+      "then": "again",
+      "else": "found"
+    },
+    {
+      "id": "found",
+      "x": 520,
+      "y": 100,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Mochi! You found her! Please take this.",
+      "next": "reward"
+    },
+    {
+      "id": "reward",
+      "x": 780,
+      "y": 100,
+      "type": "set",
+      "variable": "coins",
+      "op": "add",
+      "value": 5,
+      "next": "finish"
+    },
+    {
+      "id": "finish",
+      "x": 1040,
+      "y": 100,
+      "type": "set",
+      "variable": "quest-done",
+      "op": "set",
+      "value": true,
+      "next": "bye"
+    },
+    {
+      "id": "bye",
+      "x": 1300,
+      "y": 100,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Thank you, hero. You saved my day!",
+      "next": null
+    },
+    {
+      "id": "again",
+      "x": 520,
+      "y": 260,
+      "type": "say",
+      "speaker": "Mira",
+      "text": "Mochi is happy at home. Thank you again!",
+      "next": null
+    }
+  ]
+}
