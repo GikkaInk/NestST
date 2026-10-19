@@ -1,4 +1,4 @@
-import type { GameMap, MapObject, Project } from "@nestst/core";
+import type { Dialog, GameMap, MapObject, Project, VariableDef } from "@nestst/core";
 
 export function makeProject(opts: {
   width?: number;
@@ -6,6 +6,8 @@ export function makeProject(opts: {
   solidTiles?: number[];
   layers?: Record<number, number>[];
   objects?: MapObject[];
+  variables?: VariableDef[];
+  dialogs?: Dialog[];
 }): Project {
   const width = opts.width ?? 5;
   const height = opts.height ?? 5;
@@ -34,10 +36,20 @@ export function makeProject(opts: {
       maps: [{ id: "main", file: "maps/main.json" }],
       startMapId: "main",
       solidTiles: opts.solidTiles ?? [9],
-      variables: [],
-      dialogs: [],
+      variables: opts.variables ?? [],
+      dialogs: (opts.dialogs ?? []).map((d) => ({ id: d.id, file: `dialogs/${d.id}.json` })),
     },
     maps: { main: map },
-    dialogs: {},
+    dialogs: Object.fromEntries((opts.dialogs ?? []).map((d) => [d.id, d])),
   };
+}
+
+export function makeDialog(id: string, start: string | null, nodes: Record<string, unknown>[]): Dialog {
+  return {
+    schemaVersion: 1,
+    id,
+    name: `Dialog ${id}`,
+    start,
+    nodes: nodes.map((n) => ({ x: 0, y: 0, ...n })),
+  } as Dialog;
 }

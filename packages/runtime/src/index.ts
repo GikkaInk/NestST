@@ -14,3 +14,15 @@ export { createPlayer, stepPlayer, TILE_MOVE_MS } from "./game/player.js";
 export type { PlayerState, InputFrame } from "./game/player.js";
 export { createInput } from "./game/input.js";
 export { cameraFor } from "./game/camera.js";
+export { evalCondition } from "./game/conditions.js";
+export type { VarValue } from "./game/conditions.js";
+export {
+  createSession,
+  startDialog,
+  advance,
+  moveSelection,
+  interact,
+  enterCell,
+  closeDialog,
+} from "./game/session.js";
+export type { Session, DialogView } from "./game/session.js";
