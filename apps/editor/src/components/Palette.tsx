@@ -1,3 +1,4 @@
+import { isSolidTile } from "@nestst/core";
 import { builtinTileColor } from "@nestst/runtime";
 import type { EditorStore } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
@@ -11,7 +12,10 @@ export function tileCss(id: number): string {
 }
 
 export function Palette({ store }: { store: EditorStore }) {
-  const { selectedTile, tool } = useEditorState(store);
+  const { selectedTile, tool, project, showSolid } = useEditorState(store);
+  const manifest = project?.manifest;
+  const isSolid = (id: number) => manifest !== undefined && isSolidTile(manifest, id);
+  const solid = isSolid(selectedTile);
   const ids = Array.from({ length: PALETTE_SIZE }, (_, i) => i + 1);
   return (
     <aside className="palette card" aria-label="Tile palette">
@@ -25,6 +29,29 @@ export function Palette({ store }: { store: EditorStore }) {
         />
         <span>{tool === "eraser" ? "Eraser" : `Tile ${selectedTile}`}</span>
       </div>
+      <div className="palette__walls">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={solid}
+          className="check"
+          disabled={manifest === undefined}
+          onClick={() => store.setTileSolid(selectedTile, !solid)}
+        >
+          <span className="check__box" aria-hidden="true" />
+          Blocks walking
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showSolid}
+          className="check"
+          onClick={() => store.toggleShowSolid()}
+        >
+          <span className="check__box" aria-hidden="true" />
+          Show walls
+        </button>
+      </div>
       <div className="palette__grid" role="group" aria-label="Choose a tile">
         {ids.map((id) => {
           const selected = tool === "brush" && id === selectedTile;
@@ -36,6 +63,7 @@ export function Palette({ store }: { store: EditorStore }) {
               style={{ background: tileCss(id) }}
               aria-label={`Tile ${id}`}
               title={`Tile ${id}`}
+              data-solid={isSolid(id) || undefined}
               aria-pressed={selected}
               onClick={() => store.selectTile(id)}
             />

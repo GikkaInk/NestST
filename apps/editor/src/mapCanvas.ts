@@ -3,10 +3,10 @@
  * the pointer/wheel/keyboard wiring. All maths lives in mapInput.ts; this file
  * only glues it to Pixi and the store. Not unit-tested (needs WebGL).
  */
-import { paintTiles } from "@nestst/core";
+import { isSolidTile, paintTiles } from "@nestst/core";
 import type { GameMap } from "@nestst/core";
-import { createBuiltinTileset, createTileMapView, destroyTileset } from "@nestst/runtime";
-import type { TileMapView } from "@nestst/runtime";
+import { createBuiltinTileset, createObjectsView, createTileMapView, destroyTileset } from "@nestst/runtime";
+import type { ObjectsView, TileMapView } from "@nestst/runtime";
 import { Application, BufferImageSource, Color, Container, Graphics, Texture, TilingSprite } from "pixi.js";
 import { strokeTile } from "./editorStore.js";
 import type { EditorStore } from "./editorStore.js";
@@ -18,6 +18,7 @@ import {
   wheelZoomFactor,
   zoomAt,
   createStroke,
+  eraserAction,
   isStrokePointer,
 } from "./mapInput.js";
 import type { Camera, Cell, Stroke } from "./mapInput.js";
@@ -85,6 +86,11 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
   const front = new Container({ label: "map-front" });
   let checker: TilingSprite | null = null;
   const outline = new Graphics();
+  const solidOverlay = new Graphics();
+  let objectsView: ObjectsView | null = null;
+  let objectsTileSize = 0;
+  let shownObjects: unknown = null;
+  let shownSolidKey: { map: GameMap; solid: readonly number[]; show: boolean } | null = null;
   const hover = new Graphics();
   let hoverCell: Cell | null = null;
 
@@ -169,12 +175,52 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     shownMap = map;
   };
 
+  /** Objects live in the front container, so they share the map's camera. */
+  const syncObjects = (map: GameMap): void => {
+    if (objectsView === null || objectsTileSize !== map.tileSize) {
+      objectsView?.destroy();
+      objectsView = createObjectsView(map.tileSize);
+      objectsTileSize = map.tileSize;
+      front.addChildAt(objectsView.container, 0);
+      shownObjects = null;
+    }
+    if (shownObjects !== map.objects) {
+      shownObjects = map.objects;
+      objectsView.setObjects(map.objects);
+    }
+  };
+
+  /** Hatch over every cell holding a solid tile in any layer; redrawn only on change. */
+  const syncSolid = (map: GameMap, solid: readonly number[], show: boolean): void => {
+    const k = shownSolidKey;
+    if (k !== null && k.map === map && k.solid === solid && k.show === show) return;
+    shownSolidKey = { map, solid, show };
+    solidOverlay.clear();
+    solidOverlay.visible = show;
+    if (!show || solid.length === 0) return;
+    const t = map.tileSize;
+    const manifest = { solidTiles: solid } as Parameters<typeof isSolidTile>[0];
+    const mark = 0x3a2e4f;
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (!map.layers.some((l) => isSolidTile(manifest, l.tiles[y * map.width + x] ?? 0))) continue;
+        solidOverlay.rect(x * t, y * t, t, t).fill({ color: mark, alpha: 0.18 });
+        solidOverlay.moveTo(x * t, y * t + t).lineTo(x * t + t, y * t);
+        solidOverlay.moveTo(x * t, y * t + t / 2).lineTo(x * t + t / 2, y * t);
+        solidOverlay.moveTo(x * t + t / 2, y * t + t).lineTo(x * t + t, y * t + t / 2);
+      }
+    }
+    solidOverlay.stroke({ width: Math.max(1, t / 16), color: mark, alpha: 0.5 });
+  };
+
   const sync = (): void => {
     if (!ready || stroke !== null) return;
     const s = store.getState();
     const map = currentMap();
     if (map === null) return;
     if (map !== shownMap) showMap(map);
+    syncObjects(map);
+    syncSolid(map, s.project!.manifest.solidTiles, s.showSolid);
     if (s.project!.manifest !== shownManifest) {
       shownManifest = s.project!.manifest;
       fit();
@@ -232,11 +278,22 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     if (e.button !== 0 || stroke !== null || pan !== null) return;
     // No painting while a folder dialog is open or a project is loading.
     const editorMode = store.getState().mode;
-    if (editorMode === "dialog" || editorMode === "loading") return;
+    if (editorMode === "dialog" || editorMode === "loading" || editorMode === "playing") return;
     const map = currentMap();
     const layer = map?.layers[0];
     if (!map || !layer) return;
     host.focus({ preventScroll: true });
+    const { tool } = store.getState();
+    const cell = screenToCell(cam, p.x, p.y, map.tileSize);
+    const inside = cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height;
+    if (tool === "spawn" || tool === "npc") {
+      if (inside) store.placeObjectAt(cell.x, cell.y);
+      return;
+    }
+    if (tool === "eraser" && inside && eraserAction(map, cell) === "object") {
+      store.removeObjectAt(cell.x, cell.y);
+      return;
+    }
     capture(e.pointerId);
     stroke = createStroke(map, layer.id, strokeTile(store.getState()));
     strokePointer = e.pointerId;
@@ -361,7 +418,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     host.appendChild(app.canvas);
     checker = new TilingSprite({ texture: checkerTexture(palette.checkA, palette.checkB), width: 1, height: 1 });
     back.addChild(checker, outline);
-    front.addChild(hover);
+    front.addChild(solidOverlay, hover);
     app.stage.addChild(back, front);
 
     app.canvas.addEventListener("pointerdown", onPointerDown);
@@ -401,6 +458,8 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
       scheme?.removeEventListener("change", onScheme);
       view?.destroy();
       view = null;
+      objectsView?.destroy();
+      objectsView = null;
       const checkerTex = checker?.texture;
       app.destroy({ removeView: true }, { children: true });
       checkerTex?.destroy(true);

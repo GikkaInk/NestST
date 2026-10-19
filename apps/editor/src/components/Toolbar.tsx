@@ -7,9 +7,11 @@ import {
   IconEraser,
   IconFit,
   IconNew,
+  IconNpc,
   IconOpen,
   IconRedo,
   IconSave,
+  IconSpawn,
   IconUndo,
   IconZoomIn,
   IconZoomOut,
@@ -64,6 +66,8 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   const tools: Array<{ id: Tool; label: string; key: string; icon: ReactNode }> = [
     { id: "brush", label: "Brush", key: "B", icon: <IconBrush /> },
     { id: "eraser", label: "Eraser", key: "E", icon: <IconEraser /> },
+    { id: "spawn", label: "Spawn", key: "P", icon: <IconSpawn /> },
+    { id: "npc", label: "NPC", key: "N", icon: <IconNpc /> },
   ];
   return (
     <div className="toolbar" role="toolbar" aria-label="Editor tools">

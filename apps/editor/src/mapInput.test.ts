@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_SCALE, MIN_SCALE } from "@nestst/runtime";
 import {
   centeredCamera,
+  eraserAction,
   clampScale,
   createStroke,
   isStrokePointer,
@@ -172,3 +173,15 @@ describe("isStrokePointer", () => {
   });
 });
 
+
+describe("eraserAction", () => {
+  const map = {
+    objects: [{ id: "spawn", kind: "spawn", x: 2, y: 3, props: {} }],
+  } as never;
+  it("removes the object when the cell holds one", () => {
+    expect(eraserAction(map, { x: 2, y: 3 })).toBe("object");
+  });
+  it("erases the tile on an empty cell", () => {
+    expect(eraserAction(map, { x: 0, y: 0 })).toBe("tile");
+  });
+});

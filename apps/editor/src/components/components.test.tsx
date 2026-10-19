@@ -217,6 +217,18 @@ describe("Toolbar", () => {
     expect(brush.getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("Spawn and NPC buttons select their tool", async () => {
+    const store = await openStore();
+    renderBar(store);
+    fireEvent.click(screen.getByRole("button", { name: "Spawn" }));
+    expect(store.getState().tool).toBe("spawn");
+    expect(screen.getByRole("button", { name: "Spawn" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Brush" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "NPC" }));
+    expect(store.getState().tool).toBe("npc");
+    expect(screen.getByRole("button", { name: "NPC" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("every button has a tooltip and the zoom is shown in percent", async () => {
     const store = await openStore();
     renderBar(store);
@@ -249,6 +261,55 @@ describe("Palette", () => {
     act(() => store.selectTool("eraser"));
     expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
     expect(screen.getByText("Eraser")).toBeTruthy();
+  });
+});
+
+describe("Palette: walls", () => {
+  it("the checkbox reflects and toggles solidTiles through the store", async () => {
+    const store = await openStore();
+    render(<Palette store={store} />);
+    act(() => store.selectTile(5));
+    const box = screen.getByRole("checkbox", { name: "Blocks walking" });
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(box);
+    expect(store.getState().project!.manifest.solidTiles).toContain(5);
+    expect(box.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(box);
+    expect(store.getState().project!.manifest.solidTiles).not.toContain(5);
+  });
+
+  it("solid swatches get a hatch marker", async () => {
+    const store = await openStore();
+    render(<Palette store={store} />);
+    act(() => store.selectTile(5));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Blocks walking" }));
+    expect(screen.getByRole("button", { name: "Tile 5" }).hasAttribute("data-solid")).toBe(true);
+    expect(screen.getByRole("button", { name: "Tile 6" }).hasAttribute("data-solid")).toBe(false);
+  });
+
+  it("the Show walls switch calls toggleShowSolid", async () => {
+    const store = await openStore();
+    const spy = vi.spyOn(store, "toggleShowSolid");
+    render(<Palette store={store} />);
+    const sw = screen.getByRole("switch", { name: "Show walls" });
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(sw);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(store.getState().showSolid).toBe(false);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+  });
+});
+
+describe("App: tool keys", () => {
+  it("P selects spawn and N selects NPC", async () => {
+    const store = await openStore();
+    render(<App store={store} />);
+    fireEvent.keyDown(window, { code: "KeyP" });
+    expect(store.getState().tool).toBe("spawn");
+    fireEvent.keyDown(window, { code: "KeyN" });
+    expect(store.getState().tool).toBe("npc");
+    fireEvent.keyDown(window, { code: "KeyB" });
+    expect(store.getState().tool).toBe("brush");
   });
 });
 

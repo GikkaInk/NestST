@@ -82,6 +82,8 @@ export function App({ store }: { store: EditorStore }) {
       if (e.altKey || isTextField(e.target)) return;
       if (e.code === "KeyB") store.selectTool("brush");
       else if (e.code === "KeyE") store.selectTool("eraser");
+      else if (e.code === "KeyP") store.selectTool("spawn");
+      else if (e.code === "KeyN") store.selectTool("npc");
       else if (e.code === "Equal" || e.code === "NumpadAdd") controls?.zoomIn();
       else if (e.code === "Minus" || e.code === "NumpadSubtract") controls?.zoomOut();
       else if (e.code === "Digit0" || e.code === "Numpad0") controls?.fit();

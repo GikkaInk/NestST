@@ -2,7 +2,8 @@
  * Pure maths for the map canvas: screen ↔ world ↔ cell, pan, zoom about the
  * cursor and brush strokes. Kept apart from Pixi so it can be unit-tested.
  */
-import type { TileEdit } from "@nestst/core";
+import { objectAt } from "@nestst/core";
+import type { GameMap, TileEdit } from "@nestst/core";
 import { MAX_SCALE, MIN_SCALE } from "@nestst/runtime";
 
 /** Same convention as `TileMapView.setCamera`: world pixel at the screen's top-left, and zoom. */
@@ -132,4 +133,12 @@ export function createStroke(
       return added;
     },
   };
+}
+
+/**
+ * What a click with the eraser does: remove the object on the cell if there is
+ * one (no tile stroke then), otherwise erase tiles as a stroke.
+ */
+export function eraserAction(map: GameMap, cell: Cell): "object" | "tile" {
+  return objectAt(map, cell.x, cell.y) === undefined ? "tile" : "object";
 }
