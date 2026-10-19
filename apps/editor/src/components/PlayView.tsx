@@ -39,7 +39,8 @@ export function PlayView({ store }: { store: EditorStore }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Escape") return;
+      // A confirm dialog open over the game handles its own Esc (and marks it handled).
+      if (e.code !== "Escape" || e.defaultPrevented) return;
       e.preventDefault();
       store.stopPlay();
     };

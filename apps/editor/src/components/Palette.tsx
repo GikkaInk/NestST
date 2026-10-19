@@ -12,9 +12,10 @@ export function tileCss(id: number): string {
 }
 
 export function Palette({ store }: { store: EditorStore }) {
-  const { selectedTile, tool, project, showSolid } = useEditorState(store);
+  const { selectedTile, tool, project, showSolid, mode } = useEditorState(store);
   const manifest = project?.manifest;
   const isSolid = (id: number) => manifest !== undefined && isSolidTile(manifest, id);
+  const inert = mode === "playing"; // the game owns the keyboard and the map
   const solid = isSolid(selectedTile);
   const ids = Array.from({ length: PALETTE_SIZE }, (_, i) => i + 1);
   return (
@@ -35,7 +36,7 @@ export function Palette({ store }: { store: EditorStore }) {
           role="checkbox"
           aria-checked={solid}
           className="check"
-          disabled={manifest === undefined}
+          disabled={manifest === undefined || inert}
           onClick={() => store.setTileSolid(selectedTile, !solid)}
         >
           <span className="check__box" aria-hidden="true" />
@@ -46,6 +47,7 @@ export function Palette({ store }: { store: EditorStore }) {
           role="switch"
           aria-checked={showSolid}
           className="check"
+          disabled={inert}
           onClick={() => store.toggleShowSolid()}
         >
           <span className="check__box" aria-hidden="true" />
@@ -65,6 +67,7 @@ export function Palette({ store }: { store: EditorStore }) {
               title={`Tile ${id}`}
               data-solid={isSolid(id) || undefined}
               aria-pressed={selected}
+              disabled={inert}
               onClick={() => store.selectTile(id)}
             />
           );

@@ -11,6 +11,8 @@ import { App } from "../App.js";
 import { PALETTE_SIZE, Palette } from "./Palette.js";
 import { StartScreen } from "./StartScreen.js";
 import { Toolbar } from "./Toolbar.js";
+import { PlayView } from "./PlayView.js";
+import { StrictMode } from "react";
 
 vi.mock("./MapEditor.js", () => ({ MapEditor: () => <div data-testid="map-editor" /> }));
 // The spy only records calls; `gameBehavior.fail` makes the fake createGame reject
@@ -490,6 +492,66 @@ describe("Play", () => {
     expect(save).not.toHaveBeenCalled();
     expect(select).not.toHaveBeenCalled();
     expect(store.getState().mode).toBe("playing");
+  });
+
+  it("Esc closes the confirm dialog over the game without stopping it; without a dialog it stops", async () => {
+    const destroy = okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    const stop = vi.spyOn(store, "stopPlay");
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    });
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
+    await flush();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(stop).not.toHaveBeenCalled();
+    expect(store.getState().mode).toBe("playing");
+    expect(destroy).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
+    await flush();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(store.getState().mode).toBe("idle");
+  });
+
+  it("under StrictMode the first game is destroyed once and the second stays alive", async () => {
+    const d1 = vi.fn();
+    const d2 = vi.fn();
+    const resolvers: Array<() => void> = [];
+    let n = 0;
+    createGameMock.mockImplementation(
+      () => new Promise((r) => resolvers.push(() => r({ destroy: ++n === 1 ? d1 : d2 }))),
+    );
+    const store = await storeWithSpawn();
+    store.play();
+    render(
+      <StrictMode>
+        <PlayView store={store} />
+      </StrictMode>,
+    );
+    expect(createGameMock).toHaveBeenCalledTimes(2);
+    await act(async () => resolvers.forEach((r) => r()));
+    expect(d1).toHaveBeenCalledTimes(1);
+    expect(d2).not.toHaveBeenCalled();
+    cleanup();
+    expect(d2).toHaveBeenCalledTimes(1);
+  });
+
+  it("the palette is inert while playing", async () => {
+    okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    const tile = screen.getByRole("button", { name: "Tile 5" });
+    expect(tile).toHaveProperty("disabled", true);
+    expect(screen.getByRole("checkbox", { name: /Blocks walking/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("switch", { name: /Show walls/ })).toHaveProperty("disabled", true);
+    fireEvent.click(tile);
+    expect(store.getState().selectedTile).not.toBe(5);
   });
 
   it("closing the window while playing with unsaved changes still asks", async () => {
