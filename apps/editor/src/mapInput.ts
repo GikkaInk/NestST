@@ -142,3 +142,24 @@ export function createStroke(
 export function eraserAction(map: GameMap, cell: Cell): "object" | "tile" {
   return objectAt(map, cell.x, cell.y) === undefined ? "tile" : "object";
 }
+
+/** Indices (y * width + x) of cells holding a solid tile in any layer; tile 0 is never solid. */
+export function solidCells(
+  map: { width: number; height: number; layers: ReadonlyArray<{ tiles: ArrayLike<number> }> },
+  solidTiles: readonly number[],
+): number[] {
+  const solid = new Set(solidTiles);
+  solid.delete(0);
+  const out: number[] = [];
+  if (solid.size === 0) return out;
+  const n = map.width * map.height;
+  for (let i = 0; i < n; i++) {
+    for (const layer of map.layers) {
+      if (solid.has(layer.tiles[i] ?? 0)) {
+        out.push(i);
+        break;
+      }
+    }
+  }
+  return out;
+}

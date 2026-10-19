@@ -9,6 +9,7 @@ import {
   lineCells,
   panBy,
   screenToCell,
+  solidCells,
   screenToWorld,
   wheelZoomFactor,
   zoomAt,
@@ -183,5 +184,21 @@ describe("eraserAction", () => {
   });
   it("erases the tile on an empty cell", () => {
     expect(eraserAction(map, { x: 0, y: 0 })).toBe("tile");
+  });
+});
+
+describe("solidCells", () => {
+  const map = {
+    width: 2,
+    height: 2,
+    layers: [{ tiles: [0, 1, 0, 0] }, { tiles: [0, 0, 5, 0] }],
+  };
+  it("finds solid tiles in any layer", () => {
+    expect(solidCells(map, [1, 5])).toEqual([1, 2]);
+    expect(solidCells(map, [5])).toEqual([2]);
+  });
+  it("returns nothing for an empty list and never treats tile 0 as solid", () => {
+    expect(solidCells(map, [])).toEqual([]);
+    expect(solidCells(map, [0])).toEqual([]);
   });
 });

@@ -287,6 +287,17 @@ describe("Palette: walls", () => {
     expect(screen.getByRole("button", { name: "Tile 6" }).hasAttribute("data-solid")).toBe(false);
   });
 
+  it("the checkbox keeps the eraser tool and the selected tile", async () => {
+    const store = await openStore();
+    render(<Palette store={store} />);
+    act(() => store.selectTile(5));
+    act(() => store.selectTool("eraser"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Blocks walking" }));
+    expect(store.getState().tool).toBe("eraser");
+    expect(store.getState().selectedTile).toBe(5);
+    expect(store.getState().project!.manifest.solidTiles).toContain(5);
+  });
+
   it("the Show walls switch calls toggleShowSolid", async () => {
     const store = await openStore();
     const spy = vi.spyOn(store, "toggleShowSolid");

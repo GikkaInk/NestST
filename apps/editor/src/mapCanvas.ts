@@ -3,7 +3,7 @@
  * the pointer/wheel/keyboard wiring. All maths lives in mapInput.ts; this file
  * only glues it to Pixi and the store. Not unit-tested (needs WebGL).
  */
-import { isSolidTile, paintTiles } from "@nestst/core";
+import { paintTiles } from "@nestst/core";
 import type { GameMap } from "@nestst/core";
 import { createBuiltinTileset, createObjectsView, createTileMapView, destroyTileset } from "@nestst/runtime";
 import type { ObjectsView, TileMapView } from "@nestst/runtime";
@@ -19,6 +19,7 @@ import {
   zoomAt,
   createStroke,
   eraserAction,
+  solidCells,
   isStrokePointer,
 } from "./mapInput.js";
 import type { Camera, Cell, Stroke } from "./mapInput.js";
@@ -198,17 +199,18 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     solidOverlay.clear();
     solidOverlay.visible = show;
     if (!show || solid.length === 0) return;
+    const cells = solidCells(map, solid);
+    if (cells.length === 0) return;
     const t = map.tileSize;
-    const manifest = { solidTiles: solid } as Parameters<typeof isSolidTile>[0];
-    const mark = 0x3a2e4f;
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        if (!map.layers.some((l) => isSolidTile(manifest, l.tiles[y * map.width + x] ?? 0))) continue;
-        solidOverlay.rect(x * t, y * t, t, t).fill({ color: mark, alpha: 0.18 });
-        solidOverlay.moveTo(x * t, y * t + t).lineTo(x * t + t, y * t);
-        solidOverlay.moveTo(x * t, y * t + t / 2).lineTo(x * t + t / 2, y * t);
-        solidOverlay.moveTo(x * t + t / 2, y * t + t).lineTo(x * t + t, y * t + t / 2);
-      }
+    const mark = palette.outline;
+    for (const i of cells) solidOverlay.rect((i % map.width) * t, Math.floor(i / map.width) * t, t, t);
+    solidOverlay.fill({ color: mark, alpha: 0.18 });
+    for (const i of cells) {
+      const x = (i % map.width) * t;
+      const y = Math.floor(i / map.width) * t;
+      solidOverlay.moveTo(x, y + t).lineTo(x + t, y);
+      solidOverlay.moveTo(x, y + t / 2).lineTo(x + t / 2, y);
+      solidOverlay.moveTo(x + t / 2, y + t).lineTo(x + t, y + t / 2);
     }
     solidOverlay.stroke({ width: Math.max(1, t / 16), color: mark, alpha: 0.5 });
   };
@@ -374,6 +376,11 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
   const scheme = window.matchMedia?.("(prefers-color-scheme: dark)");
   const onScheme = (): void => {
     palette = colors();
+    shownSolidKey = null;
+    if (shownMap) {
+      const s = store.getState();
+      if (s.project) syncSolid(shownMap, s.project.manifest.solidTiles, s.showSolid);
+    }
     if (checker) {
       const old = checker.texture;
       checker.texture = checkerTexture(palette.checkA, palette.checkB);
