@@ -47,5 +47,22 @@
       ]
     }
   ],
-  "objects": []
+  "objects": [
+    {
+      "id": "spawn",
+      "kind": "spawn",
+      "x": 24,
+      "y": 16,
+      "props": {}
+    },
+    {
+      "id": "npc-1",
+      "kind": "npc",
+      "x": 25,
+      "y": 16,
+      "props": {
+        "name": "NPC 1"
+      }
+    }
+  ]
 }
