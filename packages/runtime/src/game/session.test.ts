@@ -288,6 +288,7 @@ describe("events", () => {
     enterCell(s, p, "main", 2, 2);
     expect(s.vars["n"]).toBe(1);
     expect(Object.keys(s)).not.toContain("fired");
+    expect(JSON.stringify(s)).not.toContain("main:t");
     const s2 = createSession(p);
     s2.vars["f"] = true;
     enterCell(s2, p, "main", 2, 2);
@@ -322,5 +323,125 @@ describe("events", () => {
     enterCell(s, p, "main", 2, 2);
     expect(s.dialog).toMatchObject({ text: "hi" });
     expect(s.vars["n"]).toBe(0);
+  });
+
+  it("once state is independent between sessions", () => {
+    const p = makeProject({
+      variables: [num],
+      objects: [spawn, ev("t", 2, 2, { trigger: "touch", once: true, actions: [{ type: "set", variable: "n", op: "add", value: 1 }] })],
+    });
+    const a = createSession(p);
+    const b = createSession(p);
+    enterCell(a, p, "main", 2, 2);
+    enterCell(b, p, "main", 2, 2);
+    expect(a.vars["n"]).toBe(1);
+    expect(b.vars["n"]).toBe(1);
+  });
+
+  it("a skipped event after a teleport does not consume its once", () => {
+    const p = makeProject({
+      variables: [num],
+      objects: [
+        spawn,
+        ev("a", 2, 2, { trigger: "touch", actions: [{ type: "teleport", map: "main", x: 3, y: 3 }] }),
+        ev("b", 2, 2, { trigger: "touch", once: true, actions: [{ type: "set", variable: "n", op: "add", value: 1 }] }),
+      ],
+    });
+    const s = createSession(p);
+    enterCell(s, p, "main", 2, 2);
+    expect(s.vars["n"]).toBe(0);
+    // Remove the blocking event: the once event still fires.
+    p.maps["main"]!.objects = p.maps["main"]!.objects.filter((o) => o.id !== "a");
+    enterCell(s, p, "main", 2, 2);
+    expect(s.vars["n"]).toBe(1);
+  });
+
+  it("a touch event can start a dialog", () => {
+    const p = makeProject({
+      dialogs: [hello],
+      objects: [spawn, ev("t", 2, 2, { trigger: "touch", actions: [{ type: "dialog", dialog: "d" }] })],
+    });
+    const s = createSession(p);
+    enterCell(s, p, "main", 2, 2);
+    expect(s.dialog).toMatchObject({ text: "hi" });
+  });
+});
+
+describe("dialog robustness", () => {
+  it("long say cycles and self-looping choices never trip the auto-step limit", () => {
+    const p = makeProject({
+      dialogs: [
+        makeDialog("cyc", "a", [say("a", "b"), say("b", "a")]),
+        makeDialog("ch", "c", [{ id: "c", type: "choice", options: [{ text: "again", next: "c" }] }]),
+      ],
+    });
+    for (const id of ["cyc", "ch"]) {
+      const s = createSession(p);
+      startDialog(s, p, id);
+      for (let i = 0; i < 2000; i++) advance(s, p);
+      expect(s.error).toBeNull();
+      expect(s.dialog).not.toBeNull();
+    }
+  });
+
+  it("startDialog replaces an open dialog", () => {
+    const p = makeProject({
+      dialogs: [makeDialog("x", "a", [say("a", null, "old")]), makeDialog("y", "a", [say("a", null, "new")])],
+    });
+    const s = createSession(p);
+    startDialog(s, p, "x");
+    startDialog(s, p, "y");
+    expect(s.dialog).toMatchObject({ text: "new" });
+    advance(s, p);
+    expect(s.dialog).toBeNull();
+  });
+
+  it("advance without a dialog is a no-op", () => {
+    const p = makeProject({});
+    const s = createSession(p);
+    expect(() => advance(s, p)).not.toThrow();
+    expect(s.dialog).toBeNull();
+    expect(s.error).toBeNull();
+  });
+
+  it("advance onto a missing node closes the dialog", () => {
+    const p = makeProject({ dialogs: [makeDialog("d", "a", [say("a", "gone")])] });
+    const s = createSession(p);
+    startDialog(s, p, "d");
+    expect(() => advance(s, p)).not.toThrow();
+    expect(s.dialog).toBeNull();
+  });
+
+  it("unknown dialog id sets a plain error and shows nothing", () => {
+    const p = makeProject({});
+    const s = createSession(p);
+    startDialog(s, p, "nope");
+    expect(s.dialog).toBeNull();
+    expect(s.error).toBe('Dialog "nope" does not exist');
+  });
+
+  it("startDialog clears a stale error", () => {
+    const p = makeProject({ dialogs: [makeDialog("d", "a", [say("a", null)])] });
+    const s = createSession(p);
+    startDialog(s, p, "nope");
+    startDialog(s, p, "d");
+    expect(s.error).toBeNull();
+    expect(s.dialog).not.toBeNull();
+  });
+
+  it("set/add ignore unknown variables and add ignores flags", () => {
+    const p = makeProject({
+      variables: [flag],
+      dialogs: [
+        makeDialog("d", "a", [
+          { id: "a", type: "set", variable: "ghost", op: "set", value: 1, next: "b" },
+          { id: "b", type: "set", variable: "ghost", op: "add", value: 1, next: "c" },
+          { id: "c", type: "set", variable: "f", op: "add", value: 1, next: null },
+        ]),
+      ],
+    });
+    const s = createSession(p);
+    startDialog(s, p, "d");
+    expect(s.vars).toEqual({ f: false });
   });
 });

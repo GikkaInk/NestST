@@ -69,13 +69,16 @@ function applySet(
   op: "set" | "add",
   value: VarValue,
 ): void {
+  const cur = session.vars[variable];
+  // Unknown variables are never created.
+  if (cur === undefined) return;
   if (op === "set") {
     session.vars[variable] = value;
     return;
   }
-  const cur = session.vars[variable];
-  const base = typeof cur === "number" ? cur : 0;
-  const sum = base + (typeof value === "number" ? value : 0);
+  // "add" works on numbers only; a flag is left as it is.
+  if (typeof cur !== "number" || typeof value !== "number") return;
+  const sum = cur + value;
   session.vars[variable] = Math.max(-VALUE_LIMIT, Math.min(VALUE_LIMIT, sum));
 }
 
@@ -132,7 +135,9 @@ function run(session: Session, dialog: Dialog, nodeId: string | null): void {
 }
 
 export function startDialog(session: Session, project: Project, dialogId: string): void {
+  // Starting a dialog replaces an open one and clears an error left by an earlier dialog.
   closeDialog(session);
+  session.error = null;
   const dialog = project.dialogs[dialogId];
   if (dialog === undefined) {
     session.error = `Dialog "${dialogId}" does not exist`;
