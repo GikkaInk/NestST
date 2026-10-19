@@ -4,9 +4,13 @@
  */
 import type { Project } from "@nestst/core";
 import { Application, Container, Graphics } from "pixi.js";
+import type { Tileset } from "../tileset.js";
+import type { TileMapView } from "../tileMapView.js";
+import type { ObjectsView } from "./objectsView.js";
 import { createBuiltinTileset, destroyTileset } from "../tileset.js";
 import { createTileMapView } from "../tileMapView.js";
 import { cameraFor } from "./camera.js";
+import { sceneTransform } from "./layout.js";
 import { createInput } from "./input.js";
 import { bindKeyboard } from "./keyboard.js";
 import { createObjectsView } from "./objectsView.js";
@@ -28,41 +32,48 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
   const { project, mapId, host } = opts;
   const world = createWorld(project, mapId); // throws before any Pixi resource exists
   const map = project.maps[mapId]!;
+  const t = world.tileSize;
   const app = new Application();
+  let tileset: Tileset | null = null;
+  let view: TileMapView | null = null;
+  let objects: ObjectsView | null = null;
+  let unbind: () => void = () => {};
+  let appReady = false;
   let live = false;
 
-  // The Game only exists once init has finished, so destroy() cannot race it;
-  // a caller that unmounts meanwhile must destroy the Game when the promise resolves.
-  await app.init({
-    resizeTo: host,
-    backgroundAlpha: 0,
-    antialias: false,
-    preference: "webgl",
-    resolution: window.devicePixelRatio || 1,
-    roundPixels: true,
-    autoDensity: true,
-  });
-
-  const tileset = createBuiltinTileset(app.renderer, world.tileSize);
-  const view = createTileMapView(app, map, tileset);
-  const objects = createObjectsView(world.tileSize);
-  objects.setObjects(map.objects.filter((o) => o.kind === "npc"));
-  const t = world.tileSize;
-  const playerShape = new Graphics()
-    .circle(t / 2, t / 2, t / 2 - 1)
-    .fill(PLAYER_COLOR)
-    .stroke({ width: 1, color: OUTLINE });
-  const scene = new Container({ label: "game-scene" });
-  scene.scale.set(SCALE);
-  scene.addChild(view.container, objects.container, playerShape);
-  app.stage.addChild(scene);
-  app.canvas.classList.add("game-canvas");
-  host.appendChild(app.canvas);
+  /** Idempotent; every step runs even if an earlier one throws. */
+  const cleanup = (): void => {
+    live = false;
+    try {
+      unbind();
+      unbind = () => {};
+      app.ticker.remove(onTick);
+    } finally {
+      try {
+        view?.destroy();
+        view = null;
+      } finally {
+        try {
+          objects?.destroy();
+          objects = null;
+        } finally {
+          try {
+            if (appReady) app.destroy({ removeView: true }, { children: true });
+            appReady = false;
+          } finally {
+            if (tileset !== null) destroyTileset(tileset);
+            tileset = null;
+          }
+        }
+      }
+    }
+  };
 
   const input = createInput();
-  const unbind = bindKeyboard(input, window);
   let player = createPlayer(world);
   let acc = 0;
+  let scene: Container;
+  let playerShape: Graphics;
 
   const render = (): void => {
     const m = player.moving;
@@ -75,38 +86,78 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
       playerPx: { x: px + t / 2, y: py + t / 2 },
       scale: SCALE,
     });
-    scene.position.set(-cam.x * SCALE, -cam.y * SCALE);
-    view.setCamera(cam.x, cam.y, SCALE);
+    // The map view positions itself in setCamera; `scene` gets the same transform.
+    const tr = sceneTransform(cam, SCALE);
+    scene.position.set(tr.x, tr.y);
+    scene.scale.set(tr.scale);
+    view?.setCamera(cam.x, cam.y, SCALE);
   };
 
-  const onTick = (): void => {
-    acc += app.ticker.deltaMS;
-    let steps = 0;
-    while (acc >= STEP_MS && steps < MAX_STEPS) {
-      player = stepPlayer(world, player, input.poll(), STEP_MS);
-      acc -= STEP_MS;
-      steps++;
+  function onTick(): void {
+    if (!live) return;
+    try {
+      acc += app.ticker.deltaMS;
+      let steps = 0;
+      while (acc >= STEP_MS && steps < MAX_STEPS) {
+        player = stepPlayer(world, player, input.poll(), STEP_MS);
+        acc -= STEP_MS;
+        steps++;
+      }
+      if (steps === MAX_STEPS) acc = 0;
+      render();
+    } catch (err) {
+      console.error(err);
+      try {
+        cleanup();
+      } catch (e) {
+        console.error(e);
+      }
     }
-    if (steps === MAX_STEPS) acc = 0;
+  }
+
+  try {
+    await app.init({
+      resizeTo: host,
+      backgroundAlpha: 0,
+      antialias: false,
+      preference: "webgl",
+      resolution: window.devicePixelRatio || 1,
+      roundPixels: true,
+      autoDensity: true,
+    });
+    appReady = true;
+    tileset = createBuiltinTileset(app.renderer, t);
+    view = createTileMapView(app, map, tileset);
+    objects = createObjectsView(t);
+    objects.setObjects(map.objects.filter((o) => o.kind === "npc"));
+    playerShape = new Graphics()
+      .circle(t / 2, t / 2, t / 2 - 1)
+      .fill(PLAYER_COLOR)
+      .stroke({ width: 1, color: OUTLINE });
+    scene = new Container({ label: "game-scene" });
+    scene.addChild(objects.container, playerShape);
+    // Z-order: map below objects below player.
+    app.stage.addChild(view.container, scene);
+    app.canvas.classList.add("game-canvas");
+    host.appendChild(app.canvas);
+    live = true;
     render();
-  };
-  app.ticker.add(onTick);
-  render();
-  live = true;
+    app.ticker.add(onTick);
+    unbind = bindKeyboard(input, window);
+  } catch (err) {
+    try {
+      cleanup();
+    } catch (e) {
+      console.error(e);
+    }
+    throw err;
+  }
 
-  const cleanup = (): void => {
-    app.ticker.remove(onTick);
-    unbind();
-    view.destroy();
-    objects.destroy();
-    app.destroy({ removeView: true }, { children: true });
-    destroyTileset(tileset);
-  };
-
+  // The Game only exists once init has finished, so destroy() cannot race it;
+  // a caller that unmounts meanwhile must destroy the Game when the promise resolves.
   return {
     destroy() {
       if (!live) return;
-      live = false;
       cleanup();
     },
   };

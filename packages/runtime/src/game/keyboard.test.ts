@@ -27,11 +27,11 @@ describe("bindKeyboard", () => {
     const input = createInput();
     const target = fakeTarget();
     bindKeyboard(input, target);
-    target.emit("keydown", { code: "ArrowLeft" });
+    target.emit("keydown", { code: "ArrowLeft", preventDefault() {} });
     expect(input.poll().held).toBe("left");
-    target.emit("keyup", { code: "ArrowLeft" });
+    target.emit("keyup", { code: "ArrowLeft", preventDefault() {} });
     expect(input.poll().held).toBeNull();
-    target.emit("keydown", { code: "ArrowUp" });
+    target.emit("keydown", { code: "ArrowUp", preventDefault() {} });
     target.emit("blur");
     expect(input.poll().held).toBeNull();
   });
@@ -50,5 +50,16 @@ describe("bindKeyboard", () => {
     const remove = vi.spyOn(target, "removeEventListener");
     bindKeyboard(createInput(), target)();
     expect(remove.mock.calls.map((c) => c[0]).sort()).toEqual(["blur", "keydown", "keyup"]);
+  });
+
+  it("prevents default only for handled keys", () => {
+    const target = fakeTarget();
+    bindKeyboard(createInput(), target);
+    const down = { code: "ArrowDown", preventDefault: vi.fn() };
+    const other = { code: "KeyQ", preventDefault: vi.fn() };
+    target.emit("keydown", down);
+    target.emit("keydown", other);
+    expect(down.preventDefault).toHaveBeenCalled();
+    expect(other.preventDefault).not.toHaveBeenCalled();
   });
 });

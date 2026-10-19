@@ -1,5 +1,17 @@
 import type { Input } from "./input.js";
 
+const HANDLED = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+  "Space",
+]);
+
 export interface KeyboardTarget {
   addEventListener(type: "keydown" | "keyup", fn: (e: KeyboardEvent) => void): void;
   addEventListener(type: "blur", fn: () => void): void;
@@ -9,7 +21,10 @@ export interface KeyboardTarget {
 
 /** Feeds keydown/keyup/blur from `target` into `input`; returns an idempotent unbind. */
 export function bindKeyboard(input: Input, target: KeyboardTarget): () => void {
-  const onDown = (e: KeyboardEvent): void => input.keydown(e.code);
+  const onDown = (e: KeyboardEvent): void => {
+    if (HANDLED.has(e.code)) e.preventDefault();
+    input.keydown(e.code);
+  };
   const onUp = (e: KeyboardEvent): void => input.keyup(e.code);
   const onBlur = (): void => input.blur();
   target.addEventListener("keydown", onDown);
