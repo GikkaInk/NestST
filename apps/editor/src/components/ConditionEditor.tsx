@@ -6,6 +6,8 @@ interface Props {
   condition: Condition | undefined;
   variables: readonly VariableDef[];
   disabled: boolean;
+  /** The condition cannot be removed (e.g. a branch always has one). */
+  required?: boolean;
   onChange(condition: Condition | undefined): void;
   onInvalid(message: string): void;
 }
@@ -15,7 +17,7 @@ function defaultValue(v: VariableDef): boolean | number {
 }
 
 /** "Has condition" checkbox plus variable / operator / value fields. */
-export function ConditionEditor({ condition, variables, disabled, onChange, onInvalid }: Props) {
+export function ConditionEditor({ condition, variables, disabled, required, onChange, onInvalid }: Props) {
   const variable = condition ? variables.find((v) => v.id === condition.variable) : undefined;
   const first = variables[0];
   return (
@@ -23,7 +25,7 @@ export function ConditionEditor({ condition, variables, disabled, onChange, onIn
       <CheckField
         label="Has condition"
         checked={condition !== undefined}
-        disabled={disabled || (condition === undefined && first === undefined)}
+        disabled={disabled || required === true || (condition === undefined && first === undefined)}
         onChange={(on) =>
           onChange(on && first ? { variable: first.id, op: "==", value: defaultValue(first) } : undefined)
         }

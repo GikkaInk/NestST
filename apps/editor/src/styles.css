@@ -1010,3 +1010,235 @@ p {
     transition: none !important;
   }
 }
+
+/* ---- Dialogs tab ---- */
+.workspace--dialogs {
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.dialogs-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 300px;
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.dialogs-layout > .card {
+  align-self: stretch;
+  overflow: auto;
+}
+
+.dialogs-empty {
+  grid-column: 2 / 4;
+  align-self: start !important;
+}
+
+.dialogs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-height: 0;
+}
+
+.dialogs-list__new {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialogs-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-s);
+}
+
+.dialog-row--active {
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+
+.dialog-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-weight: 800;
+  color: var(--text);
+  background: none;
+  border: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.field--area {
+  resize: vertical;
+  min-height: 5em;
+}
+
+.dialog-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dialog-graph__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dialog-flow {
+  flex: 1;
+  min-height: 420px;
+  background: var(--stage);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* xyflow ships light colors; hand it the app's variables so both themes work. */
+.dialog-flow .react-flow {
+  --xy-background-color: var(--stage);
+  --xy-background-color-default: var(--stage);
+  --xy-background-pattern-dots-color-default: var(--stage-dots);
+  --xy-edge-stroke-default: var(--text-soft);
+  --xy-edge-stroke-selected-default: var(--focus);
+  --xy-edge-stroke-width-default: 3;
+  --xy-connectionline-stroke-default: var(--focus);
+  --xy-handle-background-color-default: var(--surface);
+  --xy-handle-border-color-default: var(--border);
+  --xy-selection-background-color-default: rgb(138 92 255 / 12%);
+  --xy-selection-border-default: 1px dotted var(--focus);
+  --xy-controls-button-background-color-default: var(--surface);
+  --xy-controls-button-background-color-hover-default: var(--surface-soft);
+  --xy-controls-button-color-default: var(--text);
+  --xy-controls-button-color-hover-default: var(--text);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-controls-box-shadow-default: var(--shadow-small);
+  --xy-attribution-background-color-default: transparent;
+}
+
+.dialog-flow .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.dialog-flow .react-flow__handle {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+.flow-node {
+  --node-bg: var(--surface);
+  min-width: 170px;
+  max-width: 240px;
+  padding: 8px 12px;
+  color: var(--primary-text);
+  background: var(--node-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-small);
+  font-size: 0.85rem;
+}
+
+.react-flow__node.selected .flow-node {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.flow-node--say {
+  --node-bg: var(--lavender);
+}
+
+.flow-node--choice {
+  --node-bg: var(--pink);
+}
+
+.flow-node--set {
+  --node-bg: var(--mint);
+}
+
+.flow-node--branch {
+  --node-bg: var(--peach);
+}
+
+.flow-node--start {
+  min-width: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  --node-bg: var(--surface);
+  font-weight: 800;
+}
+
+.flow-node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.flow-node__title {
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.flow-node__badge {
+  padding: 0 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+}
+
+.flow-node__summary {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.flow-node__options {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-node__option {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 0;
+  margin-top: 2px;
+}
+
+@media (max-width: 860px) {
+  .dialogs-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .dialogs-empty {
+    grid-column: auto;
+  }
+}

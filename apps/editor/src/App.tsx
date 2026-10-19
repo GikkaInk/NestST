@@ -3,6 +3,7 @@ import type { EditorStore } from "./editorStore.js";
 import { closeWindow, onCloseRequested, setWindowTitle } from "./appWindow.js";
 import { useEditorState } from "./useEditorState.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
+import { DialogsView } from "./components/DialogsView.js";
 import { ErrorBanner } from "./components/ErrorBanner.js";
 import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
@@ -151,10 +152,8 @@ export function App({ store }: { store: EditorStore }) {
             <VariablesView store={store} />
           </main>
         ) : view === "dialogs" ? (
-          <main className="workspace workspace--single">
-            <section className="card dialogs-panel" aria-label="Dialogs">
-              <h2 className="panel-title">Dialogs</h2>
-            </section>
+          <main className="workspace workspace--dialogs">
+            <DialogsView store={store} />
           </main>
         ) : (
           <main className="workspace workspace--map">
