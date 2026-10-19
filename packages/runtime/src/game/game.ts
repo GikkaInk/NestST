@@ -15,7 +15,11 @@ import { watchResize } from "./resizeWatch.js";
 import { createInput } from "./input.js";
 import { bindKeyboard } from "./keyboard.js";
 import { createObjectsView } from "./objectsView.js";
-import { createPlayer, stepPlayer } from "./player.js";
+import { createPlayer } from "./player.js";
+import { createDialogBox } from "./dialogBox.js";
+import type { DialogBox } from "./dialogBox.js";
+import { stepFrame } from "./frame.js";
+import { createSession } from "./session.js";
 import { createWorld } from "./world.js";
 
 export interface Game {
@@ -31,13 +35,17 @@ const OUTLINE = 0x3a2e4f;
 
 export async function createGame(opts: { project: Project; mapId: string; host: HTMLElement }): Promise<Game> {
   const { project, mapId, host } = opts;
-  const world = createWorld(project, mapId); // throws before any Pixi resource exists
+  let world = createWorld(project, mapId); // throws before any Pixi resource exists
   const map = project.maps[mapId]!;
   const t = world.tileSize;
+  // A fresh session per game: variables, once-state and dialogs never leak between plays.
+  const session = createSession(project);
+  session.mapId = mapId;
   const app = new Application();
   let tileset: Tileset | null = null;
   let view: TileMapView | null = null;
   let objects: ObjectsView | null = null;
+  let dialog: DialogBox | null = null;
   let unbind: () => void = () => {};
   let unwatch: () => void = () => {};
   let appReady = false;
@@ -62,11 +70,16 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
           objects = null;
         } finally {
           try {
-            if (appReady) app.destroy({ removeView: true }, { children: true });
-            appReady = false;
+            dialog?.destroy();
+            dialog = null;
           } finally {
-            if (tileset !== null) destroyTileset(tileset);
-            tileset = null;
+            try {
+              if (appReady) app.destroy({ removeView: true }, { children: true });
+              appReady = false;
+            } finally {
+              if (tileset !== null) destroyTileset(tileset);
+              tileset = null;
+            }
           }
         }
       }
@@ -97,17 +110,28 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
     view?.setCamera(cam.x, cam.y, SCALE);
   };
 
+  /** After a teleport: the new map's tiles and NPCs (the world and player are already new). */
+  const showMap = (): void => {
+    const next = project.maps[session.mapId]!;
+    view?.setMap(next);
+    objects?.setObjects(next.objects.filter((o) => o.kind === "npc"));
+  };
+
   function onTick(): void {
     if (!live) return;
     try {
       acc += app.ticker.deltaMS;
       let steps = 0;
       while (acc >= STEP_MS && steps < MAX_STEPS) {
-        player = stepPlayer(world, player, input.poll(), STEP_MS);
+        const r = stepFrame(project, session, { world, player }, input.poll(), STEP_MS);
+        world = r.world;
+        player = r.player;
+        if (r.mapChanged) showMap();
         acc -= STEP_MS;
         steps++;
       }
       if (steps === MAX_STEPS) acc = 0;
+      dialog?.show(session.dialog, session.error ?? undefined);
       render();
     } catch (err) {
       console.error(err);
@@ -141,7 +165,10 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
     scene = new Container({ label: "game-scene" });
     scene.addChild(objects.container, playerShape);
     // Z-order: map below objects below player.
-    app.stage.addChild(view.container, scene);
+    dialog = createDialogBox(app.screen.width, app.screen.height);
+    // Z-order: map below objects below player below the screen-space dialog box
+    // (unscaled, so it must not sit inside `scene`).
+    app.stage.addChild(view.container, scene, dialog.container);
     app.canvas.classList.add("game-canvas");
     host.appendChild(app.canvas);
     live = true;
@@ -151,6 +178,7 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
     unwatch = watchResize(host, () => {
       if (!live) return;
       app.resize();
+      dialog?.resize(app.screen.width, app.screen.height);
       render();
     });
   } catch (err) {

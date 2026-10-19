@@ -35,6 +35,14 @@ describe("createWorld", () => {
     }
   });
 
+  it("uses the start cell instead of spawn, and needs no spawn then", () => {
+    const noSpawn = makeProject({ objects: [{ id: "n", kind: "npc", x: 1, y: 1, props: {} }] });
+    expect(createWorld(noSpawn, "main", { x: 3, y: 2 }).spawn).toEqual({ x: 3, y: 2 });
+    const withSpawn = makeProject({});
+    expect(createWorld(withSpawn, "main", { x: 4, y: 4 }).spawn).toEqual({ x: 4, y: 4 });
+    expect(createWorld(withSpawn, "main").spawn).toEqual({ x: 0, y: 0 });
+  });
+
   it("throws no_map for an unknown map id", () => {
     expect(() => createWorld(makeProject({}), "nope")).toThrow(NestError);
   });

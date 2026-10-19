@@ -62,4 +62,17 @@ describe("bindKeyboard", () => {
     expect(down.preventDefault).toHaveBeenCalled();
     expect(other.preventDefault).not.toHaveBeenCalled();
   });
+
+  it("prevents default for action keys and feeds them to the input", () => {
+    const target = fakeTarget();
+    const input = createInput();
+    bindKeyboard(input, target);
+    for (const code of ["Space", "Enter", "KeyZ"]) {
+      const e = { code, preventDefault: vi.fn() };
+      target.emit("keydown", e);
+      expect(e.preventDefault).toHaveBeenCalled();
+      expect(input.poll().action).toBe(true);
+      target.emit("keyup", { code, preventDefault() {} });
+    }
+  });
 });

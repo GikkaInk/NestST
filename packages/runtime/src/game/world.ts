@@ -13,11 +13,19 @@ export interface World {
   spawn: { x: number; y: number };
 }
 
-export function createWorld(project: Project, mapId: string): World {
+/**
+ * `start` overrides the spawn cell (used for teleports); then the map needs no
+ * spawn. Without `start` and without a spawn point this throws `no_spawn`.
+ */
+export function createWorld(
+  project: Project,
+  mapId: string,
+  start?: { x: number; y: number },
+): World {
   const map = project.maps[mapId];
   if (map === undefined) throw new NestError("no_map", `Map "${mapId}" does not exist`);
   const spawn = map.objects.find((o) => o.kind === "spawn");
-  if (spawn === undefined) {
+  if (start === undefined && spawn === undefined) {
     throw new NestError("no_spawn", `Map "${map.name}" has no spawn point`);
   }
   return {
@@ -37,7 +45,7 @@ export function createWorld(project: Project, mapId: string): World {
           name: typeof name === "string" && name !== "" ? name : o.id,
         };
       }),
-    spawn: { x: spawn.x, y: spawn.y },
+    spawn: start !== undefined ? { x: start.x, y: start.y } : { x: spawn!.x, y: spawn!.y },
   };
 }
 

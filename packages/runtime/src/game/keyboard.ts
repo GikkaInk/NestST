@@ -10,6 +10,8 @@ const HANDLED = new Set([
   "KeyS",
   "KeyD",
   "Space",
+  "Enter",
+  "KeyZ",
 ]);
 
 export interface KeyboardTarget {
