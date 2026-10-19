@@ -227,6 +227,12 @@ describe("addNode", () => {
     ok(addNode(addNode(empty(), "set", { x: 0, y: 0 }), "branch", { x: 0, y: 0 }));
   });
 
+  it("never generates the reserved marker id", () => {
+    let d = empty();
+    for (let i = 0; i < 20; i++) d = addNode(d, "say", { x: 0, y: 0 });
+    expect(d.nodes.some((n) => n.id === START_MARKER_ID)).toBe(false);
+  });
+
   it("rounds and clamps positions", () => {
     const d = ok(addNode(empty(), "say", { x: 1.6, y: -5e9 }));
     expect(d.nodes[0]).toMatchObject({ x: 2, y: -1000000 });

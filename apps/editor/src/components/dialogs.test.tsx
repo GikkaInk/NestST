@@ -185,6 +185,43 @@ describe("DialogGraph glue", () => {
     expect((onChange.mock.calls[0]![0] as Dialog).nodes[2]).toMatchObject({ x: 50, y: 60 });
   });
 
+  it("a multi-node drag stop saves all moves in one change and leaves no stale drag entries", () => {
+    const { onChange } = setup();
+    act(() => {
+      flow.props.onNodesChange([{ type: "position", id: "n1", position: { x: 1, y: 1 }, dragging: true }]);
+      flow.props.onNodesChange([{ type: "position", id: "n3", position: { x: 2, y: 2 }, dragging: true }]);
+    });
+    const a = { id: "n1", position: { x: 11, y: 12 } };
+    const b = { id: "n3", position: { x: 21, y: 22 } };
+    act(() => flow.props.onNodeDragStop({}, a, [a, b]));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0]![0] as Dialog;
+    expect(next.nodes[0]).toMatchObject({ x: 11, y: 12 });
+    expect(next.nodes[2]).toMatchObject({ x: 21, y: 22 });
+    // props still show the stored dialog, not the old drag positions
+    expect(flow.props.nodes.find((n: any) => n.id === "n1").position).toEqual({ x: 10, y: 20 });
+    expect(flow.props.nodes.find((n: any) => n.id === "n3").position).toEqual({ x: 600, y: 20 });
+  });
+
+  it("turns multi-selection off", () => {
+    setup();
+    expect(flow.props.multiSelectionKeyCode).toBeNull();
+    expect(flow.props.selectionKeyCode).toBeNull();
+    expect(flow.props.selectionOnDrag).toBe(false);
+  });
+
+  it("drops the selection of an edge that no longer exists", () => {
+    const view = render(
+      <DialogGraph dialog={DIALOG} variables={VARS} selectedId={null} disabled={false} onChange={() => true} onSelect={() => {}} />,
+    );
+    act(() => flow.props.onEdgesChange([{ type: "select", id: "n1:next", selected: true }]));
+    expect(flow.props.edges.find((e: any) => e.id === "n1:next").selected).toBe(true);
+    const cut = { ...DIALOG, nodes: DIALOG.nodes.map((n) => (n.id === "n1" ? { ...n, next: null } : n)) } as Dialog;
+    view.rerender(<DialogGraph dialog={cut} variables={VARS} selectedId={null} disabled={false} onChange={() => true} onSelect={() => {}} />);
+    view.rerender(<DialogGraph dialog={DIALOG} variables={VARS} selectedId={null} disabled={false} onChange={() => true} onSelect={() => {}} />);
+    expect(flow.props.edges.find((e: any) => e.id === "n1:next").selected).toBe(false);
+  });
+
   it("a drag that ends where it started commits nothing", () => {
     const { onChange } = setup();
     act(() => flow.props.onNodeDragStop({}, { id: "n3", position: { x: 600, y: 20 } }));

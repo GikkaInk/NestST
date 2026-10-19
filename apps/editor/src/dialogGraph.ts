@@ -117,6 +117,7 @@ function replace(dialog: Dialog, id: string, next: DialogNode): Dialog {
 }
 
 export function applyConnect(dialog: Dialog, c: ConnectRequest): Dialog {
+  // Self-links (a node pointing at itself) are allowed on purpose: the runtime loop guard (dialog_loop) handles them.
   if (!dialog.nodes.some((n) => n.id === c.target)) return dialog;
   if (c.source === START_MARKER_ID) {
     return c.sourceHandle === null || c.sourceHandle === START_HANDLE ? { ...dialog, start: c.target } : dialog;
@@ -149,7 +150,7 @@ function clampPos(v: number): number {
 /** Smallest unused `n<k>`. */
 function newNodeId(dialog: Dialog): string {
   const used = new Set(dialog.nodes.map((n) => n.id));
-  for (let k = 1; ; k++) if (!used.has(`n${k}`)) return `n${k}`;
+  for (let k = 1; ; k++) if (!used.has(`n${k}`)) return `n${k}`; // never `__start__`: it is not of the form n<k>
 }
 
 function defaultNode(type: NodeType, id: string, x: number, y: number, vars: readonly VariableDef[]): DialogNode {

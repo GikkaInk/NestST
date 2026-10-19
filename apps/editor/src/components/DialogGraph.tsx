@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, Controls, Handle, Position, ReactFlow } from "@xyflow/react";
 import type { Edge, Node, NodeChange, EdgeChange, NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -132,6 +132,11 @@ export function DialogGraph({ dialog, variables, selectedId, disabled, onChange,
     [disabled, onChange],
   );
 
+  const edgeGone = selectedEdge !== null && !dialogToFlow(dialog).edges.some((e) => e.id === selectedEdge);
+  useEffect(() => {
+    if (edgeGone) setSelectedEdge(null);
+  }, [edgeGone]);
+
   const names = useMemo(() => new Map(variables.map((v) => [v.id, v.name] as const)), [variables]);
 
   const { nodes, edges } = useMemo(() => {
@@ -142,9 +147,10 @@ export function DialogGraph({ dialog, variables, selectedId, disabled, onChange,
       selected: n.id === selectedId,
       data: { ...n.data, summary: n.data.node ? nodeSummary(n.data.node, names) : "" },
     }));
-    const edges = flow.edges.map((e) => ({ ...e, selected: e.id === selectedEdge }));
+    // A selected edge that is gone (undo, delete) is no longer selected.
+    const edges = flow.edges.map((e) => ({ ...e, selected: e.id === selectedEdge && !edgeGone }));
     return { nodes: nodes as unknown as Node[], edges: edges as unknown as Edge[] };
-  }, [dialog, drag, selectedId, selectedEdge, names]);
+  }, [dialog, drag, selectedId, selectedEdge, edgeGone, names]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -209,13 +215,16 @@ export function DialogGraph({ dialog, variables, selectedId, disabled, onChange,
           onConnect={(c) => {
             if (c.source && c.target) commit(applyConnect(latest.current, c));
           }}
-          onNodeDragStop={(_, n) => {
-            setDrag((d) => {
-              const { [n.id]: _gone, ...rest } = d;
-              return rest;
-            });
-            commit(moveNode(latest.current, n.id, n.position));
+          onNodeDragStop={(_, n, dragged) => {
+            // All dragged nodes in one change; every drag entry is dropped.
+            setDrag({});
+            let next = latest.current;
+            for (const d of dragged && dragged.length > 0 ? dragged : [n]) next = moveNode(next, d.id, d.position);
+            commit(next);
           }}
+          multiSelectionKeyCode={null}
+          selectionKeyCode={null}
+          selectionOnDrag={false}
           onDelete={({ nodes: gone, edges: cut }) => {
             let next = latest.current;
             for (const e of cut) next = applyDisconnect(next, e.id);

@@ -228,3 +228,13 @@ describe("manifest variables and dialogs", () => {
     fails(() => parseManifest(manifest({ dialogs: [{ id: "x", file: "dialogs/y.json" }] })), "invalid_manifest", "dialogs/x.json");
   });
 });
+
+describe("reserved node id", () => {
+  it('rejects "__start__"', () => {
+    const raw = {
+      schemaVersion: 1, id: "d", name: "D", start: null,
+      nodes: [{ id: "__start__", x: 0, y: 0, type: "say", speaker: "", text: "x", next: null }],
+    };
+    expect(() => parseDialog(raw)).toThrow('node id "__start__" is reserved');
+  });
+});

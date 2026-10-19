@@ -78,6 +78,9 @@ export const conditionSchema = z
     }
   });
 
+/** Not allowed as a dialog node id: the editor uses it for its start marker. */
+const RESERVED_NODE_ID = "__start__";
+
 const nodeId = z.string().min(1).max(64);
 const nextId = nodeId.nullable();
 const position = {
@@ -190,6 +193,8 @@ export function parseDialog(raw: unknown, file?: string): Dialog {
 
   const ids = new Set<string>();
   for (const node of dialog.nodes) {
+    // The editor draws the start marker under this id.
+    if (node.id === RESERVED_NODE_ID) fail(`node id "${RESERVED_NODE_ID}" is reserved`);
     if (ids.has(node.id)) fail(`node id "${node.id}" is used more than once`);
     ids.add(node.id);
   }
