@@ -4,3 +4,13 @@ export { createBuiltinTileset, tileTexture, builtinTileColor, destroyTileset } f
 export type { Tileset } from "./tileset.js";
 export { createTileMapView, MIN_SCALE, MAX_SCALE } from "./tileMapView.js";
 export type { TileMapView } from "./tileMapView.js";
+export { createGame } from "./game/game.js";
+export type { Game } from "./game/game.js";
+export { createObjectsView } from "./game/objectsView.js";
+export type { ObjectsView } from "./game/objectsView.js";
+export { createWorld, canEnter } from "./game/world.js";
+export type { World, Dir } from "./game/world.js";
+export { createPlayer, stepPlayer, TILE_MOVE_MS } from "./game/player.js";
+export type { PlayerState, InputFrame } from "./game/player.js";
+export { createInput } from "./game/input.js";
+export { cameraFor } from "./game/camera.js";
