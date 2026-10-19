@@ -955,6 +955,15 @@ describe("objects, solid tiles and play", () => {
     expect(tilesOf(store)[1]).toBe(2);
   });
 
+  it("reportError puts a message into error without touching the mode", async () => {
+    const { store } = await storeWithNewProject();
+    store.reportError("Could not start the game. Boom.");
+    expect(store.getState().error).toBe("Could not start the game. Boom.");
+    expect(store.getState().mode).toBe("idle");
+    store.dismissError();
+    expect(store.getState().error).toBeNull();
+  });
+
   it("showSolid defaults to true and toggles", async () => {
     const store = createEditorStore(fakeSession());
     expect(store.getState().showSolid).toBe(true);

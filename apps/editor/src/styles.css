@@ -639,6 +639,23 @@ p {
   display: none;
 }
 
+/* Game view: the runtime fills the host with its own canvas. */
+.play__host {
+  position: absolute;
+  inset: 0;
+}
+
+.play__host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tool-button--play {
+  background: var(--mint, var(--surface));
+  padding: 0 14px;
+}
+
 .stage__failure {
   position: absolute;
   inset: 0;

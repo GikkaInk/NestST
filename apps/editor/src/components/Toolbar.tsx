@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { isBusy } from "../editorStore.js";
+import { canPlay, isBusy } from "../editorStore.js";
 import type { EditorStore, Tool } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
 import {
@@ -9,9 +9,11 @@ import {
   IconNew,
   IconNpc,
   IconOpen,
+  IconPlay,
   IconRedo,
   IconSave,
   IconSpawn,
+  IconStop,
   IconUndo,
   IconZoomIn,
   IconZoomOut,
@@ -37,12 +39,14 @@ function ToolButton(props: {
   shortcut?: string;
   onClick(): void;
   disabled?: boolean;
+  /** Overrides the tooltip, e.g. to say why the button is disabled. */
+  hint?: string;
   pressed?: boolean;
   className?: string;
   children: ReactNode;
   showLabel?: boolean;
 }) {
-  const tip = props.shortcut ? `${props.label} (${props.shortcut})` : props.label;
+  const tip = props.hint ?? (props.shortcut ? `${props.label} (${props.shortcut})` : props.label);
   return (
     <button
       type="button"
@@ -60,9 +64,16 @@ function ToolButton(props: {
   );
 }
 
+/** Why Play is off, when the reason is a missing Spawn point. */
+function playHint(s: ReturnType<typeof useEditorState>): string | undefined {
+  if (canPlay(s) || s.project === null || s.mode !== "idle") return undefined;
+  return "Place a Spawn point first";
+}
+
 export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   const s = useEditorState(store);
   const hasProject = s.project !== null;
+  const playing = s.mode === "playing";
   const tools: Array<{ id: Tool; label: string; key: string; icon: ReactNode }> = [
     { id: "brush", label: "Brush", key: "B", icon: <IconBrush /> },
     { id: "eraser", label: "Eraser", key: "E", icon: <IconEraser /> },
@@ -71,6 +82,31 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   ];
   return (
     <div className="toolbar" role="toolbar" aria-label="Editor tools">
+      <div className="toolbar__group">
+        {playing ? (
+          <ToolButton
+            label="Stop"
+            shortcut="Esc"
+            className="tool-button tool-button--play"
+            onClick={() => store.stopPlay()}
+            showLabel
+          >
+            <IconStop />
+          </ToolButton>
+        ) : (
+          <ToolButton
+            label="Play"
+            shortcut="F5"
+            className="tool-button tool-button--play"
+            onClick={() => store.play()}
+            disabled={!canPlay(s)}
+            hint={playHint(s)}
+            showLabel
+          >
+            <IconPlay />
+          </ToolButton>
+        )}
+      </div>
       <div className="toolbar__group">
         <ToolButton label="New project" onClick={onNew} disabled={isBusy(s)}>
           <IconNew />

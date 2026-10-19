@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryStorage } from "@nestst/core/testing";
 import { createEditorStore } from "../editorStore.js";
@@ -12,7 +12,20 @@ import { PALETTE_SIZE, Palette } from "./Palette.js";
 import { StartScreen } from "./StartScreen.js";
 import { Toolbar } from "./Toolbar.js";
 
-vi.mock("./MapEditor.js", () => ({ MapEditor: () => null }));
+vi.mock("./MapEditor.js", () => ({ MapEditor: () => <div data-testid="map-editor" /> }));
+// The spy only records calls; `gameBehavior.fail` makes the fake createGame reject
+// (a spy that itself returned a rejected promise is flagged by vitest as unhandled).
+const { createGameSpy, gameBehavior } = vi.hoisted(() => ({
+  createGameSpy: vi.fn(),
+  gameBehavior: { fail: null as Error | null },
+}));
+vi.mock("@nestst/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nestst/runtime")>()),
+  createGame: (opts: unknown) => {
+    const result = createGameSpy(opts);
+    return gameBehavior.fail ? Promise.reject(gameBehavior.fail) : Promise.resolve(result);
+  },
+}));
 
 afterEach(cleanup);
 
@@ -321,6 +334,174 @@ describe("App: tool keys", () => {
     expect(store.getState().tool).toBe("npc");
     fireEvent.keyDown(window, { code: "KeyB" });
     expect(store.getState().tool).toBe("brush");
+  });
+});
+
+describe("Play", () => {
+  const createGameMock = createGameSpy;
+  beforeEach(() => {
+    createGameMock.mockReset();
+    gameBehavior.fail = null;
+  });
+
+  async function storeWithSpawn(): Promise<EditorStore> {
+    const store = await openStore();
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    store.selectTool("brush");
+    return store;
+  }
+
+  function okGame() {
+    const destroy = vi.fn();
+    createGameMock.mockReturnValue({ destroy });
+    return destroy;
+  }
+
+  const flush = () => act(async () => {});
+
+  it("Play is disabled without a spawn, with a hint, and enabled with one", async () => {
+    const store = await openStore();
+    render(<App store={store} />);
+    const play = screen.getByRole("button", { name: "Play" });
+    expect(play).toHaveProperty("disabled", true);
+    expect(play.getAttribute("title")).toContain("Place a Spawn point first");
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+    });
+    expect(screen.getByRole("button", { name: "Play" })).toHaveProperty("disabled", false);
+  });
+
+  it("clicking Play swaps the editor for the game and passes the in-memory project", async () => {
+    okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    expect(store.getState().dirty).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    expect(screen.queryByTestId("map-editor")).toBeNull();
+    expect(screen.getByText(/Arrow keys or WASD to walk/)).toBeTruthy();
+    expect(createGameMock).toHaveBeenCalledTimes(1);
+    const opts = createGameMock.mock.calls[0]![0];
+    expect(opts.project).toBe(store.getState().project);
+    expect(opts.mapId).toBe(store.getState().currentMapId);
+    expect(opts.host).toBeInstanceOf(HTMLElement);
+  });
+
+  it("Esc stops the game and destroys it exactly once; the editor comes back", async () => {
+    const destroy = okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
+    await flush();
+    expect(store.getState().mode).toBe("idle");
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("map-editor")).toBeTruthy();
+  });
+
+  it("the Stop button stops the game", async () => {
+    const destroy = okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await flush();
+    expect(store.getState().mode).toBe("idle");
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("F5 starts the game and prevents the reload", async () => {
+    okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    const notPrevented = fireEvent.keyDown(window, { code: "F5", key: "F5" });
+    await flush();
+    expect(notPrevented).toBe(false);
+    expect(store.getState().mode).toBe("playing");
+  });
+
+  it("Play, Stop, Play gives two createGame and two destroy calls", async () => {
+    const destroy = okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await flush();
+    expect(createGameMock).toHaveBeenCalledTimes(2);
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it("unmounting before createGame resolves destroys the game once it is ready", async () => {
+    const destroy = vi.fn();
+    let resolve!: (g: { destroy(): void }) => void;
+    createGameMock.mockReturnValue(new Promise((r) => (resolve = r)));
+    const store = await storeWithSpawn();
+    const view = render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    view.unmount();
+    expect(destroy).not.toHaveBeenCalled();
+    await act(async () => resolve({ destroy }));
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a createGame failure shows an error and returns to idle", async () => {
+    gameBehavior.fail = new Error("no webgl");
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().error).toMatch(/Could not start the game\. No webgl/);
+    expect(screen.getByTestId("map-editor")).toBeTruthy();
+  });
+
+  it("editor shortcuts do nothing while playing", async () => {
+    okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    const undo = vi.spyOn(store, "undo");
+    const save = vi.spyOn(store, "save");
+    const select = vi.spyOn(store, "selectTool");
+    for (const init of [
+      { code: "KeyB" },
+      { code: "KeyE" },
+      { code: "KeyP" },
+      { code: "KeyN" },
+      { code: "KeyZ", ctrlKey: true },
+      { code: "KeyY", ctrlKey: true },
+      { code: "KeyS", ctrlKey: true },
+    ]) {
+      fireEvent.keyDown(window, init);
+    }
+    expect(undo).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+    expect(store.getState().mode).toBe("playing");
+  });
+
+  it("closing the window while playing with unsaved changes still asks", async () => {
+    okGame();
+    const store = await storeWithSpawn();
+    render(<App store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await flush();
+    expect(store.getState().dirty).toBe(true);
+    const ev = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
   });
 });
 

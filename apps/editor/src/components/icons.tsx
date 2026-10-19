@@ -96,3 +96,14 @@ export const IconNpc = () => (
     <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
   </Icon>
 );
+
+export const IconPlay = () => (
+  <Icon>
+    <path d="M7 4.5v15l12-7.5z" />
+  </Icon>
+);
+export const IconStop = () => (
+  <Icon>
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </Icon>
+);

@@ -4,6 +4,7 @@ import { closeWindow, onCloseRequested, setWindowTitle } from "./appWindow.js";
 import { useEditorState } from "./useEditorState.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ErrorBanner } from "./components/ErrorBanner.js";
+import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
 import { MapEditor } from "./components/MapEditor.js";
 import { Palette } from "./components/Palette.js";
@@ -68,6 +69,12 @@ export function App({ store }: { store: EditorStore }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (pendingRef.current !== null || !editing) return;
+      if (e.code === "F5" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault(); // never reload the webview
+        store.play();
+        return;
+      }
+      if (store.getState().mode === "playing") return; // the game owns the keyboard
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && !e.altKey) {
         if (isTextField(e.target)) return;
@@ -132,7 +139,11 @@ export function App({ store }: { store: EditorStore }) {
       {editing ? (
         <main className="workspace">
           <Palette store={store} />
-          <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
+          {s.mode === "playing" ? (
+            <PlayView store={store} />
+          ) : (
+            <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
+          )}
         </main>
       ) : (
         <StartScreen

@@ -97,6 +97,8 @@ export interface EditorStore {
   selectTool(tool: Tool): void;
   selectTile(tile: number): void;
   dismissError(): void;
+  /** Shows a plain English message in the error banner. */
+  reportError(message: string): void;
   dismissNotice(): void;
 }
 
@@ -452,6 +454,10 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     selectTile(tile) {
       if (!Number.isInteger(tile) || tile < 1 || tile > BUILTIN_TILE_COUNT) return;
       set({ selectedTile: tile, tool: "brush" });
+    },
+
+    reportError(message) {
+      set({ error: message });
     },
 
     dismissError() {
