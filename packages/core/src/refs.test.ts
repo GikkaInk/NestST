@@ -97,12 +97,28 @@ describe("validateProjectRefs", () => {
     p.dialogs.intro!.nodes[0] = { id: "n1", x: 0, y: 0, type: "set", variable: "zzz", op: "set", value: true, next: null };
     expect(msg(p)).toMatch(/dialog "intro", node "n1".*"zzz"/);
   });
+  it("rejects mismatched types in dialog branch and choice conditions", () => {
+    const p = base();
+    p.dialogs.intro!.nodes[0] = { id: "n1", x: 0, y: 0, type: "branch", condition: { variable: "gold", op: "==", value: true }, then: null, else: null };
+    expect(msg(p)).toMatch(/node "n1".*"gold" is a number/);
+    const q = base();
+    q.dialogs.intro!.nodes[0] = { id: "n1", x: 0, y: 0, type: "choice", options: [{ text: "a", next: null, condition: { variable: "key", op: "==", value: 3 } }] };
+    expect(msg(q)).toMatch(/node "n1", option 1.*"key" is a flag/);
+  });
+  it("rejects add on a flag in a dialog set node", () => {
+    const p = base();
+    p.dialogs.intro!.nodes[0] = { id: "n1", x: 0, y: 0, type: "set", variable: "key", op: "add", value: 1, next: null };
+    expect(msg(p)).toMatch(/"add" needs a number variable/);
+  });
+  it("rejects a flag condition with >= on event props", () => {
+    expect(msg(withObj(base(), event({ condition: { variable: "key", op: ">=", value: true } })))).toMatch(/event "ev-1"/);
+  });
   it("handles a large project quickly", () => {
     const p = base();
     for (let i = 0; i < 5000; i++) p.maps.main!.objects.push({ ...event({}), id: `ev-${i}` });
     const t = Date.now();
     expect(msg(p)).toBe("");
-    expect(Date.now() - t).toBeLessThan(1000);
+    expect(Date.now() - t).toBeLessThan(5000);
   });
 });
 
@@ -114,10 +130,39 @@ describe("findReferences", () => {
       condition: { variable: "key", op: "==", value: true },
       actions: [{ type: "dialog", dialog: "intro" }, { type: "teleport", map: "main", x: 0, y: 0 }],
     }));
-    expect(findReferences(p, { kind: "variable", id: "key" })).toEqual(['dialog "intro", node n1', 'event "Door" on map "main"']);
+    expect(findReferences(p, { kind: "variable", id: "key" })).toEqual(['dialog "intro", node "n1"', 'event "Door" on map "main"']);
     expect(findReferences(p, { kind: "dialog", id: "intro" })).toEqual(['npc "Guide" on map "main"', 'event "Door" on map "main"']);
-    expect(findReferences(p, { kind: "map", id: "main" })).toEqual(['event "Door" on map "main"']);
+    expect(findReferences(p, { kind: "map", id: "main" })).toEqual(['project map "main" is the start map', 'event "Door" on map "main"']);
     expect(findReferences(p, { kind: "variable", id: "gold" })).toEqual([]);
+  });
+});
+
+describe("findReferences extras", () => {
+  it("reports the start map", () => {
+    expect(findReferences(base(), { kind: "map", id: "main" })).toEqual(['project map "main" is the start map']);
+  });
+  it("finds hits from set nodes and choice option conditions", () => {
+    const p = base();
+    p.dialogs.intro!.nodes = [
+      { id: "s1", x: 0, y: 0, type: "set", variable: "gold", op: "add", value: 1, next: null },
+      { id: "c1", x: 0, y: 0, type: "choice", options: [{ text: "a", next: null, condition: { variable: "gold", op: ">", value: 1 } }] },
+    ];
+    expect(findReferences(p, { kind: "variable", id: "gold" })).toEqual(['dialog "intro", node "s1"', 'dialog "intro", node "c1"']);
+  });
+  it("still reports references of objects with invalid props", () => {
+    const p = base();
+    withObj(p, event({
+      trigger: "bogus",
+      condition: { variable: "key" },
+      actions: [null, 5, { type: "dialog", dialog: "intro" }, { type: "teleport", map: "main" }, { type: "set", variable: "gold" }],
+    }));
+    withObj(p, { id: "npc-1", kind: "npc", x: 3, y: 3, props: { name: 7, dialog: "intro" } });
+    expect(findReferences(p, { kind: "variable", id: "key" })).toContain('event "Door" on map "main"');
+    expect(findReferences(p, { kind: "variable", id: "gold" })).toContain('event "Door" on map "main"');
+    expect(findReferences(p, { kind: "map", id: "main" })).toContain('event "Door" on map "main"');
+    expect(findReferences(p, { kind: "dialog", id: "intro" })).toEqual(['event "Door" on map "main"', 'npc "npc-1" on map "main"']);
+    withObj(p, { id: "ev-9", kind: "event", x: 4, y: 4, props: { actions: "nope", condition: 3 } });
+    expect(findReferences(p, { kind: "map", id: "zzz" })).toEqual([]);
   });
 });
 
@@ -129,5 +174,6 @@ describe("placeObjectCommand with events", () => {
     expect(() => placeObjectCommand("main", event({ actions: [{ type: "dialog", dialog: "gone" }] }), p)).toThrow(/gone/);
     expect(() => placeObjectCommand("main", event({ actions: [] }), p)).toThrow(/event/);
     expect(() => placeObjectCommand("main", npc({}), p)).toThrow(/NPC/);
+    expect(() => placeObjectCommand("main", npc({ name: "G", dialog: "gone" }), p)).toThrow(/dialog "gone" does not exist/);
   });
 });

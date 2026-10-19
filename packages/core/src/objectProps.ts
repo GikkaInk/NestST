@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { MAX_VALUE, MAX_VARIABLE_NAME, conditionSchema } from "./dialogSchema.js";
+import type { Condition } from "./dialogSchema.js";
+import { MAX_VALUE, conditionSchema } from "./dialogSchema.js";
 import { NestError, describeFirstIssue } from "./errors.js";
 import { MAX_MAP_SIZE } from "./schema.js";
 import { idSchema, intRange, isRecord, safeParseGuarded } from "./schemaUtil.js";
@@ -50,7 +51,10 @@ export const eventActionSchema = z.discriminatedUnion(
   { error: 'action type must be "dialog", "set" or "teleport"' },
 );
 
-const nameSchema = z.string().min(1).max(MAX_VARIABLE_NAME);
+/** Names of NPCs and events are 1..MAX_OBJECT_NAME characters. */
+export const MAX_OBJECT_NAME = 60;
+
+const nameSchema = z.string().min(1).max(MAX_OBJECT_NAME);
 
 export const npcPropsSchema = z.looseObject({
   name: nameSchema,
@@ -65,11 +69,24 @@ export const eventPropsSchema = z.looseObject({
   actions: z.array(eventActionSchema).min(1).max(MAX_EVENT_ACTIONS),
 });
 
-export type EventAction = z.infer<typeof eventActionSchema>;
-export type NpcProps = z.infer<typeof npcPropsSchema>;
-export type EventProps = z.infer<typeof eventPropsSchema>;
+// Explicit interfaces (no index signature); unknown extra keys are still kept at runtime.
+export type EventAction =
+  | { type: "dialog"; dialog: string }
+  | { type: "set"; variable: string; op: "set" | "add"; value: boolean | number }
+  | { type: "teleport"; map: string; x: number; y: number };
+export interface NpcProps {
+  name: string;
+  dialog?: string;
+}
+export interface EventProps {
+  name: string;
+  trigger: "touch" | "interact";
+  once: boolean;
+  condition?: Condition;
+  actions: EventAction[];
+}
 
-function parseProps<T extends z.ZodType>(schema: T, raw: unknown, what: string): z.infer<T> {
+function parseProps<T>(schema: z.ZodType, raw: unknown, what: string): T {
   const where = `in ${what} properties`;
   if (!isRecord(raw)) throw new NestError("invalid_props", `${where}: must be an object`);
   // Cheap check on the raw data first: zod would parse every action before looking at the limit.
@@ -81,13 +98,13 @@ function parseProps<T extends z.ZodType>(schema: T, raw: unknown, what: string):
   }
   const res = safeParseGuarded(schema, raw, "invalid_props", where, undefined);
   if (!res.success) throw new NestError("invalid_props", describeFirstIssue(res.error, where));
-  return res.data as z.infer<T>;
+  return res.data as T;
 }
 
 export function parseNpcProps(raw: unknown): NpcProps {
-  return parseProps(npcPropsSchema, raw, "NPC");
+  return parseProps<NpcProps>(npcPropsSchema, raw, "NPC");
 }
 
 export function parseEventProps(raw: unknown): EventProps {
-  return parseProps(eventPropsSchema, raw, "event");
+  return parseProps<EventProps>(eventPropsSchema, raw, "event");
 }

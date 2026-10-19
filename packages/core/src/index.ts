@@ -42,6 +42,7 @@ export {
 } from "./objectOps.js";
 export {
   MAX_EVENT_ACTIONS,
+  MAX_OBJECT_NAME,
   eventActionSchema,
   parseNpcProps,
   parseEventProps,

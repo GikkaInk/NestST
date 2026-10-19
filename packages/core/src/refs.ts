@@ -1,7 +1,6 @@
 import type { Condition } from "./dialogSchema.js";
 import { NestError } from "./errors.js";
 import { parseEventProps, parseNpcProps } from "./objectProps.js";
-import type { EventAction } from "./objectProps.js";
 import type { Project } from "./project.js";
 import type { MapObject } from "./schema.js";
 
@@ -97,6 +96,7 @@ export function checkObjectRefs(project: Project, mapId: string, obj: MapObject,
         const target = Object.hasOwn(project.maps, a.map) ? project.maps[a.map] : undefined;
         if (target === undefined) fail(`${at}: teleport goes to map "${a.map}", which does not exist`);
         if (a.x >= target!.width || a.y >= target!.height) {
+          // A target cell with a solid tile is not checked here: the runtime handles it.
           fail(`${at}: teleport cell (${a.x}, ${a.y}) is outside map "${a.map}" (${target!.width} x ${target!.height})`);
         }
       }
@@ -104,18 +104,24 @@ export function checkObjectRefs(project: Project, mapId: string, obj: MapObject,
   }
 }
 
-function actionRefs(a: EventAction, t: RefTarget): boolean {
-  if (a.type === "dialog") return t.kind === "dialog" && a.dialog === t.id;
-  if (a.type === "set") return t.kind === "variable" && a.variable === t.id;
-  return t.kind === "map" && a.map === t.id;
-}
+const asRecord = (v: unknown): Record<string, unknown> | undefined =>
+  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 
-function safe<T>(parse: () => T): T | undefined {
-  try {
-    return parse();
-  } catch {
-    return undefined;
-  }
+/**
+ * Lenient scan of raw object props: works even when the props are invalid (e.g. half edited),
+ * so such an object still shows up as a reference. Every access is guarded against wrong types.
+ */
+function propsRefer(raw: Record<string, unknown>, kind: string, t: RefTarget): boolean {
+  if (kind === "npc") return t.kind === "dialog" && raw.dialog === t.id;
+  if (t.kind === "variable" && asRecord(raw.condition)?.variable === t.id) return true;
+  if (!Array.isArray(raw.actions)) return false;
+  return raw.actions.some((item) => {
+    const a = asRecord(item);
+    if (a === undefined) return false;
+    if (t.kind === "dialog") return a.dialog === t.id;
+    if (t.kind === "variable") return a.variable === t.id;
+    return a.map === t.id;
+  });
 }
 
 /** Readable descriptions of everything that refers to `target`; empty when nothing does. */
@@ -123,6 +129,9 @@ export function findReferences(project: Project, target: RefTarget): string[] {
   const out: string[] = [];
   const usesVar = (c: Condition | undefined) => c !== undefined && target.kind === "variable" && c.variable === target.id;
 
+  if (target.kind === "map" && project.manifest.startMapId === target.id) {
+    out.push(`project map "${target.id}" is the start map`);
+  }
   if (target.kind === "variable") {
     for (const dialog of Object.values(project.dialogs)) {
       for (const node of dialog.nodes) {
@@ -130,21 +139,17 @@ export function findReferences(project: Project, target: RefTarget): string[] {
           (node.type === "set" && node.variable === target.id) ||
           (node.type === "branch" && usesVar(node.condition)) ||
           (node.type === "choice" && node.options.some((o) => usesVar(o.condition)));
-        if (hit) out.push(`dialog "${dialog.id}", node ${node.id}`);
+        if (hit) out.push(`dialog "${dialog.id}", node "${node.id}"`);
       }
     }
   }
 
   for (const map of Object.values(project.maps)) {
     for (const obj of map.objects as MapObject[]) {
-      const label = (what: string) => `${what} "${typeof obj.props.name === "string" ? obj.props.name : obj.id}" on map "${map.id}"`;
-      if (obj.kind === "npc") {
-        const p = safe(() => parseNpcProps(obj.props));
-        if (p && target.kind === "dialog" && p.dialog === target.id) out.push(label("npc"));
-      } else if (obj.kind === "event") {
-        const p = safe(() => parseEventProps(obj.props));
-        if (p && (usesVar(p.condition) || p.actions.some((a) => actionRefs(a, target)))) out.push(label("event"));
-      }
+      if (obj.kind !== "npc" && obj.kind !== "event") continue;
+      if (!propsRefer(obj.props, obj.kind, target)) continue;
+      const name = typeof obj.props.name === "string" ? obj.props.name : obj.id;
+      out.push(`${obj.kind} "${name}" on map "${map.id}"`);
     }
   }
   return out;

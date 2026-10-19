@@ -35,6 +35,13 @@ describe("parseNpcProps", () => {
   });
 });
 
+describe("extra keys", () => {
+  it("are kept by the parsers", () => {
+    expect(parseNpcProps({ name: "A", mood: "sad" })).toMatchObject({ mood: "sad" });
+    expect(parseEventProps(ev({ note: 1 }))).toMatchObject({ note: 1 });
+  });
+});
+
 describe("parseEventProps", () => {
   it("accepts 1 and 8 actions, rejects 0 and 9", () => {
     expect(parseEventProps(ev()).actions).toHaveLength(1);

@@ -29,3 +29,14 @@ describe("reference validation on save and load", () => {
     expect(s.files.has(MANIFEST_FILE)).toBe(true);
   });
 });
+
+describe("extra object props", () => {
+  it("survive a save/load round trip", async () => {
+    const p = createEmptyProject("G");
+    p.maps.main!.objects.push({ id: "npc-1", kind: "npc", x: 1, y: 1, props: { name: "Guide", mood: "sad" } });
+    const s = new MemoryStorage();
+    await saveProject(s, p);
+    const back = await loadProject(s);
+    expect(back.maps.main!.objects[0]!.props).toEqual({ name: "Guide", mood: "sad" });
+  });
+});
