@@ -163,8 +163,25 @@ function safeParseGuarded<T extends z.ZodType>(
   }
 }
 
+function tooBig(where: string, cells: number, file: string | undefined): NestError {
+  return new NestError(
+    "invalid_map",
+    `${where}: map is too big: ${cells} cells (width × height × layers), the limit is ${MAX_MAP_CELLS}`,
+    file,
+  );
+}
+
 export function parseMap(raw: unknown, file?: string): GameMap {
   const where = withFile(file, mapLabel(raw));
+  // Cheap check on the raw data first, so an oversized map is refused before its tiles are validated.
+  if (isRecord(raw) && Array.isArray(raw.layers)) {
+    const w = raw.width;
+    const h = raw.height;
+    if (typeof w === "number" && typeof h === "number" && Number.isFinite(w) && Number.isFinite(h)) {
+      const rawCells = w * h * raw.layers.length;
+      if (rawCells > MAX_MAP_CELLS) throw tooBig(where, rawCells, file);
+    }
+  }
   const res = safeParseGuarded(gameMapSchema, raw, "invalid_map", where, file);
   if (!res.success) {
     throw new NestError("invalid_map", describeFirstIssue(res.error, where), file);
@@ -172,13 +189,7 @@ export function parseMap(raw: unknown, file?: string): GameMap {
   const map = res.data;
 
   const cells = map.width * map.height * map.layers.length;
-  if (cells > MAX_MAP_CELLS) {
-    throw new NestError(
-      "invalid_map",
-      `${where}: map is too big: ${cells} cells (width × height × layers), the limit is ${MAX_MAP_CELLS}`,
-      file,
-    );
-  }
+  if (cells > MAX_MAP_CELLS) throw tooBig(where, cells, file);
   const expected = map.width * map.height;
   const seen = new Set<string>();
   for (const layer of map.layers) {

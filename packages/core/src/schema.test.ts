@@ -237,9 +237,24 @@ describe("parseMap on huge maps", () => {
     expect(err.message).toMatch(/from 0 to 65535/);
   });
 
-  it("rejects three such layers with a NestError", () => {
-    const err = mapError(hugeMap(99999, 3));
-    expect(err.code).toBe("invalid_map");
+  it("rejects three full-size layers because of the size limit", () => {
+    expect(() => parseMap(hugeMap(99999, 3))).toThrow(
+      expect.objectContaining({ code: "invalid_map", message: expect.stringContaining("map is too big") }),
+    );
+  });
+
+  it("still validates tiles of every layer within the limit", () => {
+    const raw = validMap({
+      width: 1024,
+      height: 2048,
+      layers: [0, 1].map((i) => ({
+        id: `l${i}`,
+        name: `L${i}`,
+        visible: true,
+        tiles: new Array(1024 * 2048).fill(i === 1 ? 99999 : 1),
+      })),
+    });
+    expect(mapError(raw).message).toMatch(/layers\[1\]\.tiles\[0\]/);
   });
 
   it("reports the first bad tile of a large layer", () => {

@@ -118,4 +118,37 @@ describe("map size limit and object rules", () => {
     const m = parseMap(validMap({ objects: [obj("s", "spawn", 0, 0), obj("a", "npc", 1, 0)] }));
     expect(m.objects).toHaveLength(2);
   });
+
+  function sized(width: number, height: number, layers: number): Record<string, unknown> {
+    return validMap({
+      width,
+      height,
+      layers: Array.from({ length: layers }, (_, i) => ({
+        id: `l${i}`,
+        name: `L${i}`,
+        visible: true,
+        tiles: new Array(width * height).fill(1),
+      })),
+    });
+  }
+
+  it("accepts exactly the limit with several layers (1024 × 2048 × 2)", () => {
+    expect(parseMap(sized(1024, 2048, 2)).layers).toHaveLength(2);
+  });
+
+  it("rejects just over the limit (2048 × 1025 × 2 = 4198400)", () => {
+    const e = err(() => parseMap(sized(2048, 1025, 2)));
+    expect(e.code).toBe("invalid_map");
+    expect(e.message).toContain("map is too big: 4198400 cells");
+  });
+
+  it("rejects 16 raw layers of 2048 × 2048 quickly", () => {
+    const raw = sized(2048, 2048, 1);
+    const layer = (raw.layers as unknown[])[0];
+    raw.layers = Array.from({ length: 16 }, () => layer);
+    const started = performance.now();
+    const e = err(() => parseMap(raw));
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(e.message).toContain("map is too big: 67108864 cells");
+  });
 });
