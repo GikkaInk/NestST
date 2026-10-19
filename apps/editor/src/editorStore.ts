@@ -62,6 +62,8 @@ export interface EditorState {
   rootLabel: string;
   /** Draw the solid-tile overlay on the map. */
   showSolid: boolean;
+  /** Counts opened/created projects; changes only when a project is adopted. */
+  openSeq: number;
 }
 
 /** Play needs a project whose current map has a spawn, and an idle editor. */
@@ -186,11 +188,18 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     projectName: "",
     rootLabel: "",
     showSolid: true,
+    openSeq: 0,
   };
 
   const set = (patch: Partial<EditorState>): void => {
     state = { ...state, ...patch };
-    for (const l of [...listeners]) l();
+    for (const l of [...listeners]) {
+      try {
+        l();
+      } catch (e) {
+        console.error(e); // one broken subscriber must not break the store or its caller
+      }
+    }
   };
 
   const historyPatch = (): Pick<EditorState, "canUndo" | "canRedo" | "dirty"> => ({
@@ -219,21 +228,24 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       notice: pendingBackup.length > 0 ? MIGRATION_NOTICE : null,
       projectName: project.manifest.name,
       rootLabel: picked.label,
+      openSeq: state.openSeq + 1,
       ...historyPatch(),
     });
   };
 
   /**
    * Pushes `cmd` to the history and does the bookkeeping shared by every edit.
-   * Throws if the command does not apply; nothing changes then.
+   * Throws if the command does not apply; nothing changes then. Returns the new
+   * project; the caller publishes it with `set` outside its try block, so a
+   * throwing subscriber is not reported as a failed edit.
    */
-  const commit = (cmd: Command): void => {
+  const commit = (cmd: Command): Project => {
     const next = history.push(cmd, state.project!);
     doneIds.push(nextStepId++);
     version += 1;
     if (doneIds.length > HISTORY_LIMIT) floorId = doneIds.shift()!;
     undoneIds = [];
-    set({ project: next, ...historyPatch() });
+    return next;
   };
 
   /** Runs an edit of the current map; errors only set `error` (a save may be in flight). */
@@ -242,14 +254,16 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     const mapId = state.currentMapId;
     if (state.mode !== "idle" && state.mode !== "saving") return false;
     if (project === null || mapId === null || !Object.hasOwn(project.maps, mapId)) return false;
+    let next: Project;
     try {
       const cmd = make(project, mapId);
       if (cmd === null) return false;
-      commit(cmd);
+      next = commit(cmd);
     } catch (e) {
       set({ error: `${prefix}${ensurePeriod(capitalize(describe(e)))}` });
       return false;
     }
+    set({ project: next, ...historyPatch() });
     return true;
   };
 
@@ -375,16 +389,18 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       if (state.mode === "dialog" || state.mode === "loading" || state.mode === "playing" || project === null || mapId === null || edits.length === 0) return false;
       const map = project.maps[mapId];
       if (map === undefined) return false;
+      let next: Project;
       try {
         paintCommand(mapId, edits, map); // validates every edit, throws on bad ones
         const effective = effectiveEdits(project, mapId, edits);
         if (effective.length === 0) return false;
-        commit(paintCommand(mapId, effective, map));
+        next = commit(paintCommand(mapId, effective, map));
       } catch (e) {
         // Only the error: a save may be in flight, and the mode must stay as it is.
         set({ error: `Could not paint there. ${ensurePeriod(capitalize(describe(e)))}` });
         return false;
       }
+      set({ project: next, ...historyPatch() });
       return true;
     },
 
@@ -394,6 +410,8 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       return edit("Could not place that there. ", (project, mapId) => {
         const map = project.maps[mapId]!;
         if (tool === "spawn") {
+          // Already standing there: nothing to do (no history step, not dirty).
+          if (map.objects.some((o) => o.kind === "spawn" && o.x === x && o.y === y)) return null;
           return placeObjectCommand(mapId, { id: "spawn", kind: "spawn", x, y, props: {} }, project);
         }
         const id = nextNpcId(map);
@@ -406,7 +424,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     },
 
     removeObjectAt(x, y) {
-      return edit("Could not place that there. ", (project, mapId) => {
+      return edit("Could not remove that. ", (project, mapId) => {
         const found = objectAt(project.maps[mapId]!, x, y);
         return found === undefined ? null : removeObjectCommand(mapId, found.id, project);
       });

@@ -11,6 +11,7 @@ import { createBuiltinTileset, destroyTileset } from "../tileset.js";
 import { createTileMapView } from "../tileMapView.js";
 import { cameraFor } from "./camera.js";
 import { sceneTransform } from "./layout.js";
+import { watchResize } from "./resizeWatch.js";
 import { createInput } from "./input.js";
 import { bindKeyboard } from "./keyboard.js";
 import { createObjectsView } from "./objectsView.js";
@@ -38,6 +39,7 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
   let view: TileMapView | null = null;
   let objects: ObjectsView | null = null;
   let unbind: () => void = () => {};
+  let unwatch: () => void = () => {};
   let appReady = false;
   let live = false;
 
@@ -45,6 +47,8 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
   const cleanup = (): void => {
     live = false;
     try {
+      unwatch();
+      unwatch = () => {};
       unbind();
       unbind = () => {};
       app.ticker.remove(onTick);
@@ -144,6 +148,11 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
     render();
     app.ticker.add(onTick);
     unbind = bindKeyboard(input, window);
+    unwatch = watchResize(host, () => {
+      if (!live) return;
+      app.resize();
+      render();
+    });
   } catch (err) {
     try {
       cleanup();

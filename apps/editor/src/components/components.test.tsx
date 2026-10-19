@@ -195,6 +195,29 @@ describe("App: Save first", () => {
   });
 });
 
+describe("App: close while playing", () => {
+  it("Save in the close dialog stops the game and saves", async () => {
+    const store = await openStore();
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+      store.selectTool("brush");
+      store.paintStroke([{ layerId: "ground", x: 0, y: 0, tile: 1 }]);
+      store.play();
+    });
+    expect(store.getState().mode).toBe("playing");
+    render(<App store={store} />);
+    await act(async () => {
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save first" }));
+    });
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().dirty).toBe(false);
+  });
+});
+
 describe("Toolbar", () => {
   const renderBar = (store: EditorStore) =>
     render(<Toolbar store={store} zoom={1.5} zoomControls={null} onNew={() => {}} onOpen={() => {}} />);
@@ -218,6 +241,36 @@ describe("Toolbar", () => {
     fireEvent.click(redo);
     expect(store.getState().canRedo).toBe(false);
     expect(redo).toHaveProperty("disabled", true);
+  });
+
+  it("undo and redo are disabled while playing", async () => {
+    const store = await openStore();
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+    });
+    renderBar(store);
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", false);
+    act(() => {
+      store.play();
+    });
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Redo" })).toHaveProperty("disabled", true);
+  });
+
+  it("Play and Stop are different DOM buttons", async () => {
+    const store = await openStore();
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+    });
+    renderBar(store);
+    const play = screen.getByRole("button", { name: "Play" });
+    act(() => {
+      store.play();
+    });
+    const stop = screen.getByRole("button", { name: "Stop" });
+    expect(stop).not.toBe(play);
   });
 
   it("tool buttons show and change the current tool", async () => {

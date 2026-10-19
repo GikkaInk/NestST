@@ -85,6 +85,7 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
       <div className="toolbar__group">
         {playing ? (
           <ToolButton
+            key="stop"
             label="Stop"
             shortcut="Esc"
             className="tool-button tool-button--play"
@@ -95,6 +96,7 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
           </ToolButton>
         ) : (
           <ToolButton
+            key="play"
             label="Play"
             shortcut="F5"
             className="tool-button tool-button--play"
@@ -126,14 +128,14 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
         </ToolButton>
       </div>
       <div className="toolbar__group">
-        <ToolButton label="Undo" shortcut="Ctrl + Z" onClick={() => store.undo()} disabled={!s.canUndo}>
+        <ToolButton label="Undo" shortcut="Ctrl + Z" onClick={() => store.undo()} disabled={!s.canUndo || playing}>
           <IconUndo />
         </ToolButton>
         <ToolButton
           label="Redo"
           shortcut="Ctrl + Shift + Z"
           onClick={() => store.redo()}
-          disabled={!s.canRedo}
+          disabled={!s.canRedo || playing}
         >
           <IconRedo />
         </ToolButton>

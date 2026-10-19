@@ -811,6 +811,44 @@ describe("objects, solid tiles and play", () => {
     expect(spawns().map((o) => [o.x, o.y])).toEqual([[5, 5]]);
   });
 
+  it("placing the spawn where it already stands is a no-op", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    store.placeObjectAt(5, 5);
+    const before = store.getState().project;
+    expect(store.placeObjectAt(5, 5)).toBe(false);
+    expect(store.getState().project).toBe(before);
+    expect(store.getState().error).toBeNull();
+    store.undo();
+    store.undo();
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  it("a spawn-same-cell no-op keeps a saved project clean", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    await store.save();
+    expect(store.placeObjectAt(1, 1)).toBe(false);
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  it("a throwing subscriber does not turn an applied edit into an error", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("spawn");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    store.subscribe(() => {
+      throw new Error("boom");
+    });
+    expect(store.placeObjectAt(2, 2)).toBe(true);
+    expect(store.paintStroke([ground(0, 0, 2)])).toBe(true);
+    expect(objectsOf(store).length).toBe(1);
+    expect(store.getState().error).toBeNull();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it("removeObjectAt removes with undo; false when nothing is there", async () => {
     const { store } = await storeWithNewProject();
     store.selectTool("npc");

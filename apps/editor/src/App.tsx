@@ -175,6 +175,8 @@ export function App({ store }: { store: EditorStore }) {
           onSave={() => {
             const kind = pending;
             setPending(null);
+            // save() refuses while playing: leave the game first.
+            if (store.getState().mode === "playing") store.stopPlay();
             void store.save().then((ok) => {
               if (!ok) return;
               // Strokes made during the save are not on disk: ask again instead of leaving.

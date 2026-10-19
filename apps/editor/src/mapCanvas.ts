@@ -10,6 +10,8 @@ import type { ObjectsView, TileMapView } from "@nestst/runtime";
 import { Application, BufferImageSource, Color, Container, Graphics, Texture, TilingSprite } from "pixi.js";
 import { strokeTile } from "./editorStore.js";
 import type { EditorStore } from "./editorStore.js";
+import { shouldFit } from "./fitSignal.js";
+import type { FitKey } from "./fitSignal.js";
 import {
   centeredCamera,
   fitScale,
@@ -81,7 +83,7 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
   let tileset: ReturnType<typeof createBuiltinTileset> | null = null;
   let tilesetSize = 0;
   let shownMap: GameMap | null = null;
-  let shownManifest: unknown = null;
+  let shownFit: FitKey | null = null;
 
   const back = new Container({ label: "map-back" });
   const front = new Container({ label: "map-front" });
@@ -223,8 +225,9 @@ export function mountMapCanvas(host: HTMLElement, store: EditorStore, cb: MapCan
     if (map !== shownMap) showMap(map);
     syncObjects(map);
     syncSolid(map, s.project!.manifest.solidTiles, s.showSolid);
-    if (s.project!.manifest !== shownManifest) {
-      shownManifest = s.project!.manifest;
+    const key: FitKey = { openSeq: s.openSeq, mapId: s.currentMapId };
+    if (shouldFit(shownFit, key)) {
+      shownFit = key;
       fit();
     } else {
       drawOverlays();
