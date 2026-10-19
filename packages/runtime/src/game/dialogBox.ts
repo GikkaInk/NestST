@@ -72,7 +72,9 @@ export function createDialogBox(width: number, height: number): DialogBox {
   let destroyed = false;
 
   const text = (value: string, fill: number, row: number): Text => {
-    const t = new Text({ text: value, style: { fontSize: FONT, fill, lineHeight: LINE_H } });
+    // wordWrap is only a backstop for glyphs wider than the layout's estimate (see `measure`).
+    const wordWrapWidth = Math.max(10, Math.floor(w) - MARGIN * 2 - PAD * 2);
+    const t = new Text({ text: value, style: { fontSize: FONT, fill, lineHeight: LINE_H, wordWrap: true, wordWrapWidth } });
     t.position.set(PAD, PAD + row * LINE_H);
     return t;
   };

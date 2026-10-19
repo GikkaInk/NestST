@@ -52,7 +52,7 @@ export function PlayView({ store }: { store: EditorStore }) {
     <section className="stage card play" aria-label="Game">
       <div ref={hostRef} className="play__host" />
       <div className="stage__hud">
-        <span className="hud-pill hud-pill--hint">Arrow keys or WASD to walk · Esc to stop</span>
+        <span className="hud-pill hud-pill--hint">Arrow keys or WASD to walk · Space/Enter/Z to talk · Esc to stop</span>
       </div>
     </section>
   );

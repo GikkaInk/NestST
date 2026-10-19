@@ -7,6 +7,8 @@ import type { EditorStore, ProjectSession } from "../editorStore.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { ErrorBanner } from "./ErrorBanner.js";
 import { NoticeBanner } from "./NoticeBanner.js";
+import { RefProblemsBanner } from "./RefProblemsBanner.js";
+import { ErrorBoundary } from "./ErrorBoundary.js";
 import { App } from "../App.js";
 import { PALETTE_SIZE, Palette } from "./Palette.js";
 import { StartScreen } from "./StartScreen.js";
@@ -662,3 +664,45 @@ describe("ConfirmDialog focus", () => {
   });
 });
 
+
+describe("RefProblemsBanner", () => {
+  it("renders nothing without problems", () => {
+    const { container } = render(<RefProblemsBanner problems={[]} />);
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("shows the first problem and lists all of them", () => {
+    render(<RefProblemsBanner problems={["a is broken", "b is broken"]} />);
+    const text = screen.getByTestId("ref-problems").textContent!;
+    expect(text).toMatch(/broken references \(a is broken\) \(and 1 more\)\. Fix them before saving or playing\./);
+    expect(text).toMatch(/b is broken/);
+  });
+});
+
+describe("ErrorBoundary", () => {
+  it("shows a friendly message with the error in details when a child throws", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    function Boom(): never {
+      throw new Error("kaboom");
+    }
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByRole("alert").textContent).toMatch(
+      /Something went wrong\. Your project is not damaged on disk; unsaved changes may be lost\. Please restart the editor\./,
+    );
+    expect(screen.getByText(/kaboom/)).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it("renders children when nothing throws", () => {
+    render(
+      <ErrorBoundary>
+        <p>fine</p>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("fine")).toBeTruthy();
+  });
+});

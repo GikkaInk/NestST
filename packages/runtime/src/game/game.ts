@@ -164,7 +164,6 @@ export async function createGame(opts: { project: Project; mapId: string; host: 
       .stroke({ width: 1, color: OUTLINE });
     scene = new Container({ label: "game-scene" });
     scene.addChild(objects.container, playerShape);
-    // Z-order: map below objects below player.
     dialog = createDialogBox(app.screen.width, app.screen.height);
     // Z-order: map below objects below player below the screen-space dialog box
     // (unscaled, so it must not sit inside `scene`).

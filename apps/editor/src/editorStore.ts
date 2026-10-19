@@ -2,6 +2,7 @@ import {
   History,
   MANIFEST_FILE,
   BUILTIN_TILE_COUNT,
+  collectProjectRefProblems,
   createEmptyProject,
   loadProject,
   nextNpcId,
@@ -88,6 +89,11 @@ export interface EditorState {
   activeDialogId: string | null;
   /** Map the running game started on; null unless playing. */
   playingMapId: string | null;
+  /**
+   * Broken references in the open project (plain English, up to 20). Kept here, not in the
+   * project, so history snapshots stay untouched. Re-checked after every edit.
+   */
+  refProblems: string[];
 }
 
 function hasSpawn(project: Project, mapId: string): boolean {
@@ -104,9 +110,11 @@ export function playMapId(s: Pick<EditorState, "project" | "currentMapId" | "mod
   return hasSpawn(project, start) ? start : null;
 }
 
-/** Play needs a project with a spawn (see `playMapId`), and an idle editor. */
-export function canPlay(s: Pick<EditorState, "project" | "currentMapId" | "mode">): boolean {
-  return s.mode === "idle" && playMapId(s) !== null;
+/** Play needs a project with a spawn (see `playMapId`), no broken references, and an idle editor. */
+export function canPlay(
+  s: Pick<EditorState, "project" | "currentMapId" | "mode"> & Partial<Pick<EditorState, "refProblems">>,
+): boolean {
+  return s.mode === "idle" && (s.refProblems?.length ?? 0) === 0 && playMapId(s) !== null;
 }
 
 /**
@@ -133,10 +141,14 @@ export function defaultEventProps(project: Project, mapId: string, x: number, y:
   };
 }
 
+const RESERVED_ID = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+
 /** Unique dialog id from a name: lowercase [a-z0-9-], fallback `dialog`, suffix -2, -3 ... on collisions, max 64 chars. */
 function dialogIdFor(name: string, taken: (id: string) => boolean): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  const base = slug.slice(0, 64).replace(/-+$/, "") || "dialog";
+  let base = slug.slice(0, 64).replace(/-+$/, "") || "dialog";
+  // Windows device names are reserved ids; `con` becomes `con-1`.
+  if (RESERVED_ID.test(base)) base = `${base}-1`;
   if (!taken(base)) return base;
   for (let n = 2; ; n++) {
     const suffix = `-${n}`;
@@ -277,6 +289,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     selectedObjectId: null,
     activeDialogId: null,
     playingMapId: null,
+    refProblems: [],
   };
 
   const set = (patch: Partial<EditorState>): void => {
@@ -296,6 +309,16 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     dirty: topId() !== savedId,
   });
 
+  /** Current broken references of `project`; keeps the old list if the check itself cannot run. */
+  const recheckRefs = (project: Project): string[] => {
+    try {
+      const found = collectProjectRefProblems(project);
+      return found.length === 0 && state.refProblems.length === 0 ? state.refProblems : found;
+    } catch {
+      return state.refProblems;
+    }
+  };
+
   /** Patch after the project changed: history flags, and selections that point at something that is gone. */
   const changePatch = (project: Project): Partial<EditorState> => {
     const map = state.currentMapId !== null && Object.hasOwn(project.maps, state.currentMapId)
@@ -305,6 +328,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     const dialog = state.activeDialogId;
     return {
       project,
+      refProblems: recheckRefs(project),
       ...historyPatch(),
       ...(selected !== null && !map?.objects.some((o) => o.id === selected) ? { selectedObjectId: null } : {}),
       ...(dialog !== null && !Object.hasOwn(project.dialogs, dialog) ? { activeDialogId: null } : {}),
@@ -323,8 +347,12 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       ? project.manifest.startMapId
       : (project.manifest.maps[0]?.id ?? null);
     pendingBackup = project.migratedFrom ?? [];
+    // Reference problems live in the store state, not in the project that goes through the history.
+    const { refProblems = [], ...clean } = project;
+    project = clean;
     set({
       project,
+      refProblems,
       currentMapId: mapId,
       error: null,
       mode: "idle",

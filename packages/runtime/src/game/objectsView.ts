@@ -9,6 +9,7 @@ export interface ObjectsView {
 
 const SPAWN_COLOR = 0x4fc3a1;
 const NPC_COLOR = 0xf2a93b;
+const EVENT_COLOR = 0x8f7ae0;
 const OUTLINE = 0x3a2e4f;
 
 function sameObjects(a: readonly MapObject[], b: readonly MapObject[]): boolean {
@@ -25,7 +26,7 @@ function sameObjects(a: readonly MapObject[], b: readonly MapObject[]): boolean 
   });
 }
 
-/** Draws spawn points (a diamond) and NPCs (a circle with its name). */
+/** Draws spawn points (a diamond), NPCs (a circle with its name) and events (a rounded square with its name). */
 export function createObjectsView(tileSize: number): ObjectsView {
   const container = new Container({ label: "objects" });
   let shown: readonly MapObject[] | null = null;
@@ -43,7 +44,8 @@ export function createObjectsView(tileSize: number): ObjectsView {
     if (o.kind === "spawn") {
       g.poly([c, 1, tileSize - 1, c, c, tileSize - 1, 1, c]).fill(SPAWN_COLOR).stroke({ width: 1, color: OUTLINE });
     } else {
-      g.circle(c, c, c - 1).fill(NPC_COLOR).stroke({ width: 1, color: OUTLINE });
+      if (o.kind === "event") g.roundRect(2, 2, tileSize - 4, tileSize - 4, tileSize / 5).fill(EVENT_COLOR).stroke({ width: 1, color: OUTLINE });
+      else g.circle(c, c, c - 1).fill(NPC_COLOR).stroke({ width: 1, color: OUTLINE });
       const name = o.props["name"];
       const label = new Text({
         text: typeof name === "string" && name !== "" ? name : o.id,

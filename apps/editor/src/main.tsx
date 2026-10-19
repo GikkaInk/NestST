@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { App } from "./App.js";
+import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { createEditorStore } from "./editorStore.js";
 import { createTauriSession } from "./tauriStorage.js";
 
@@ -14,7 +15,9 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <App store={store} />
+      <ErrorBoundary>
+        <App store={store} />
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

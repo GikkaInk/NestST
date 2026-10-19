@@ -66,9 +66,10 @@ function ToolButton(props: {
   );
 }
 
-/** Why Play is off, when the reason is a missing Spawn point. */
+/** Why Play is off: broken references or a missing Spawn point. */
 function playHint(s: ReturnType<typeof useEditorState>): string | undefined {
   if (canPlay(s) || s.project === null || s.mode !== "idle") return undefined;
+  if (s.refProblems.length > 0) return "Fix the broken references first";
   return "Place a Spawn point first";
 }
 

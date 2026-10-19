@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MANIFEST_FILE, createEmptyProject, loadProject } from "@nestst/core";
+import { MANIFEST_FILE, createEmptyProject, loadProject, saveProject } from "@nestst/core";
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
 import { canPlay, createEditorStore, defaultEventProps, isBusy, playMapId, strokeTile } from "./editorStore.js";
@@ -1220,5 +1220,65 @@ describe("M2c: selection, event props, variables, dialogs, views", () => {
     expect(store.getState().playingMapId).toBe("main");
     store.stopPlay();
     expect(store.getState().playingMapId).toBeNull();
+  });
+});
+
+describe("broken references on open", () => {
+  async function brokenStore() {
+    const storage = new MemoryStorage();
+    const p = createEmptyProject("G");
+    p.maps.main!.objects.push({ id: "spawn", kind: "spawn", x: 1, y: 1, props: {} });
+    await saveProject(storage, p);
+    const map = JSON.parse(storage.files.get("maps/main.json")!);
+    map.objects.push({ id: "npc-1", kind: "npc", x: 2, y: 2, props: { name: "Guide", dialog: "gone" } });
+    storage.files.set("maps/main.json", JSON.stringify(map));
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.open()).toBe(true);
+    return { store, storage };
+  }
+
+  it("keeps the problems in state, not in the project, and blocks Play", async () => {
+    const { store } = await brokenStore();
+    const s = store.getState();
+    expect(s.refProblems).toHaveLength(1);
+    expect(s.refProblems[0]).toMatch(/dialog "gone" does not exist/);
+    expect(s.project).not.toHaveProperty("refProblems");
+    expect(canPlay(s)).toBe(false);
+    expect(store.play()).toBe(false);
+  });
+
+  it("save stays strict and shows the core error", async () => {
+    const { store } = await brokenStore();
+    expect(await store.save()).toBe(false);
+    expect(store.getState().error).toMatch(/Fix these references before saving/);
+  });
+
+  it("the problems disappear after the fixing edit, and Play works again", async () => {
+    const { store } = await brokenStore();
+    expect(store.setObjectProps("npc-1", { name: "Guide" })).toBe(true);
+    expect(store.getState().refProblems).toEqual([]);
+    expect(canPlay(store.getState())).toBe(true);
+    expect(await store.save()).toBe(true);
+  });
+
+  it("undo brings the problems back", async () => {
+    const { store } = await brokenStore();
+    store.setObjectProps("npc-1", { name: "Guide" });
+    store.undo();
+    expect(store.getState().refProblems).toHaveLength(1);
+  });
+
+  it("a normal project has no problems", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.getState().refProblems).toEqual([]);
+  });
+});
+
+describe("new dialog ids", () => {
+  it("avoids reserved device names", async () => {
+    const { store } = await storeWithNewProject();
+    expect(store.newDialog("Con")).toBe("con-1");
+    expect(store.newDialog("Nul")).toBe("nul-1");
+    expect(store.getState().error).toBeNull();
   });
 });

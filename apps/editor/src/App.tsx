@@ -7,6 +7,7 @@ import { DialogsView } from "./components/DialogsView.js";
 import { ErrorBanner } from "./components/ErrorBanner.js";
 import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
+import { RefProblemsBanner } from "./components/RefProblemsBanner.js";
 import { MapEditor } from "./components/MapEditor.js";
 import { ObjectInspector } from "./components/ObjectInspector.js";
 import { Palette } from "./components/Palette.js";
@@ -145,6 +146,7 @@ export function App({ store }: { store: EditorStore }) {
 
       <ErrorBanner message={s.error} onDismiss={store.dismissError} />
       <NoticeBanner message={s.notice} onDismiss={store.dismissNotice} />
+      {editing && <RefProblemsBanner problems={s.refProblems} />}
 
       {editing ? (
         view === "variables" ? (

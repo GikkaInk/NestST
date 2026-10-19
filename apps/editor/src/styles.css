@@ -1242,3 +1242,29 @@ p {
     grid-column: auto;
   }
 }
+
+.crash {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  min-height: 100vh;
+  padding: 24px;
+  text-align: center;
+}
+
+.crash__face {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.crash details {
+  max-width: min(720px, 90vw);
+  text-align: left;
+}
+
+.crash pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

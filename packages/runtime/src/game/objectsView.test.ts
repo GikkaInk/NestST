@@ -13,6 +13,17 @@ describe("createObjectsView", () => {
     view.destroy();
   });
 
+  it("draws an event as its own shape with a name, one child per object", () => {
+    const view = createObjectsView(16);
+    const event: MapObject = { id: "e", kind: "event", x: 4, y: 4, props: { name: "Door" } };
+    view.setObjects([npc, event]);
+    expect(view.container.children).toHaveLength(2);
+    const [n, e] = view.container.children as Array<{ label: string; children: unknown[] }>;
+    expect(e!.label).toBe("event:e");
+    expect(e!.children).toHaveLength(n!.children.length);
+    view.destroy();
+  });
+
   it("does not recreate children for an identical list", () => {
     const view = createObjectsView(16);
     view.setObjects([spawn, npc]);
