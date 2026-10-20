@@ -143,10 +143,10 @@ export function defaultEventProps(project: Project, mapId: string, x: number, y:
     if (o.kind === "event" && typeof name === "string") used.add(name);
   }
   let n = 1;
-  while (used.has(`Event ${n}`)) n++;
+  while (used.has(`Trigger ${n}`)) n++;
   const firstDialog = project.manifest.dialogs[0]?.id ?? Object.keys(project.dialogs)[0];
   return {
-    name: `Event ${n}`,
+    name: `Trigger ${n}`,
     trigger: "touch",
     once: false,
     actions: firstDialog !== undefined
@@ -589,7 +589,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
         const id = nextNpcId(map);
         return placeObjectCommand(
           mapId,
-          { id, kind: "npc", x, y, props: { name: `NPC ${id.slice("npc-".length)}` } },
+          { id, kind: "npc", x, y, props: { name: `Character ${id.slice("npc-".length)}` } },
           project,
         );
       });

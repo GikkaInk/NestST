@@ -3,7 +3,9 @@ import type { Dialog } from "@nestst/core";
 import { canEditMode } from "../editorForms.js";
 import type { EditorStore } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
+import { LABELS } from "../labels.js";
 import { DialogGraph } from "./DialogGraph.js";
+import { EmptyState } from "./EmptyState.js";
 import { NodeInspector } from "./NodeInspector.js";
 
 /** Dialogs in manifest order. */
@@ -154,14 +156,20 @@ export function DialogsView({ store }: { store: EditorStore }) {
         </>
       ) : (
         <section className="card dialogs-empty" aria-label="No dialog selected">
-          <h2 className="panel-title">
-            {dialogs.length === 0 ? "Create your first dialog" : "Pick a dialog"}
-          </h2>
-          <p className="hint">
-            {dialogs.length === 0
-              ? "Type a name on the left and press Create dialog. Dialogs are conversations with lines, choices and branches."
-              : "Choose a dialog from the list on the left, or create a new one."}
-          </p>
+          {dialogs.length === 0 ? (
+            <EmptyState
+              title={LABELS.noDialogsTitle}
+              text={LABELS.noDialogsText}
+              actionLabel={LABELS.createFirstDialog}
+              disabled={disabled}
+              onAction={() => store.newDialog(LABELS.firstDialogName)}
+            />
+          ) : (
+            <>
+              <h2 className="panel-title">Pick a dialog</h2>
+              <p className="hint">Choose a dialog from the list on the left, or create a new one.</p>
+            </>
+          )}
         </section>
       )}
     </div>

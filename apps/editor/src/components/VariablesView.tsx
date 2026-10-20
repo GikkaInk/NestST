@@ -3,6 +3,8 @@ import type { VariableDef } from "@nestst/core";
 import { canEditMode, newVariableId, variableRows } from "../editorForms.js";
 import type { EditorStore } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
+import { LABELS } from "../labels.js";
+import { EmptyState } from "./EmptyState.js";
 import { CommitField, SelectField, ValueField } from "./fields.js";
 
 /** The Variables tab: a table of the project's flags and numbers. */
@@ -13,6 +15,10 @@ export function VariablesView({ store }: { store: EditorStore }) {
   const rows = variableRows(s.project);
   const disabled = !canEditMode(s.mode);
   const save = (next: VariableDef[]) => store.setVariables(next);
+  const addVariable = () => {
+    const id = newVariableId(rows);
+    save([...vars, { id, name: `Variable ${id.slice("var-".length)}`, type: "flag", initial: false }]);
+  };
   const change = (i: number, patch: Partial<VariableDef>) =>
     save(vars.map((v, j) => (j === i ? { ...v, ...patch } : v)));
 
@@ -24,16 +30,19 @@ export function VariablesView({ store }: { store: EditorStore }) {
           type="button"
           className="button button--small"
           disabled={disabled || rows.length >= MAX_VARIABLES}
-          onClick={() => {
-            const id = newVariableId(rows);
-            save([...vars, { id, name: `Variable ${id.slice("var-".length)}`, type: "flag", initial: false }]);
-          }}
+          onClick={addVariable}
         >
           Add variable
         </button>
       </div>
       {rows.length === 0 ? (
-        <p className="hint">No variables yet. Flags and numbers let events and dialogs remember things.</p>
+        <EmptyState
+          title={LABELS.noVariablesTitle}
+          text={LABELS.noVariablesText}
+          actionLabel={LABELS.createFirstVariable}
+          disabled={disabled}
+          onAction={addVariable}
+        />
       ) : (
         <table className="var-table">
           <thead>

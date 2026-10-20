@@ -7,6 +7,9 @@ import { ActionListEditor } from "./ActionListEditor.js";
 import { ConditionEditor } from "./ConditionEditor.js";
 import { CheckField, CommitField, Labeled, SelectField } from "./fields.js";
 
+/** Select value that triggers dialog creation; never stored in props.dialog. */
+const CREATE_DIALOG = "__create__";
+
 /** Properties of the selected NPC or event (right panel on the Map tab). */
 export function ObjectInspector({ store }: { store: EditorStore }) {
   const s = useEditorState(store);
@@ -38,8 +41,12 @@ export function ObjectInspector({ store }: { store: EditorStore }) {
             options={[
               { value: "", label: "None" },
               ...project.manifest.dialogs.map((d) => ({ value: d.id, label: project.dialogs[d.id]?.name ?? d.name })),
+              { value: CREATE_DIALOG, label: LABELS.createDialogOption },
             ]}
-            onChange={(v) => patch({ dialog: v === "" ? undefined : v })}
+            onChange={(v) => {
+              if (v === CREATE_DIALOG) store.newDialogForObject(obj.id);
+              else patch({ dialog: v === "" ? undefined : v });
+            }}
           />
         </Labeled>
       ) : (

@@ -40,6 +40,14 @@ export const LABELS = {
   onboardingCollapse: "Hide",
   onboardingNeedCharacter: "Add a character on this map first",
   onboardingFixRefs: "Fix the broken references first",
+  noDialogsTitle: "No dialogs yet",
+  noDialogsText: "A dialog is what a character says. Create one, then give it lines and choices.",
+  createFirstDialog: "Create your first dialog",
+  firstDialogName: "First talk",
+  noVariablesTitle: "No variables yet",
+  noVariablesText: "Flags and numbers let events and dialogs remember things.",
+  createFirstVariable: "Create your first variable",
+  createDialogOption: "Create a dialog…",
 } as const;
 
 /** Text and action label of each first-steps item. */

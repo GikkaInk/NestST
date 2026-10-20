@@ -89,6 +89,28 @@ describe("VariablesView", () => {
     expect(store.getState().project!.manifest.variables).toEqual([]);
   });
 
+  it("shows an empty state whose button adds the first variable", async () => {
+    const store = await openStore();
+    render(<VariablesView store={store} />);
+    expect(screen.getByText("No variables yet")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create your first variable" }));
+    expect(store.getState().project!.manifest.variables).toEqual([
+      { id: "var-1", name: "Variable 1", type: "flag", initial: false },
+    ]);
+    expect(screen.queryByText("No variables yet")).toBeNull();
+  });
+
+  it("disables the empty-state button while playing", async () => {
+    const store = await openStore();
+    store.selectTool("spawn");
+    store.placeObjectAt(0, 0);
+    render(<VariablesView store={store} />);
+    act(() => {
+      expect(store.play()).toBe(true);
+    });
+    expect((screen.getByRole("button", { name: "Create your first variable" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("commits the name and the initial value on blur, not on typing", async () => {
     const store = await openStore();
     store.setVariables([{ id: "coins", name: "Coins", type: "number", initial: 0 }]);
@@ -140,12 +162,35 @@ describe("ObjectInspector: NPC", () => {
     act(() => store.selectObject("npc-1"));
     render(<ObjectInspector store={store} />);
     const select = screen.getByLabelText("Dialog") as HTMLSelectElement;
-    expect([...select.options].map((o) => o.textContent)).toEqual(["None", "Hello"]);
+    expect([...select.options].map((o) => o.textContent)).toEqual(["None", "Hello", "Create a dialog…"]);
     fireEvent.change(select, { target: { value: "hello" } });
     const npc = () => store.getState().project!.maps[store.getState().currentMapId!]!.objects.find((o) => o.id === "npc-1")!;
     expect(npc().props).toMatchObject({ dialog: "hello" });
     fireEvent.change(select, { target: { value: "" } });
     expect(npc().props).not.toHaveProperty("dialog");
+  });
+
+  it("Create a dialog… calls newDialogForObject and never stores __create__", async () => {
+    const store = await richStore();
+    act(() => store.selectObject("npc-1"));
+    render(<ObjectInspector store={store} />);
+    fireEvent.change(screen.getByLabelText("Dialog"), { target: { value: "__create__" } });
+    const s = store.getState();
+    const npc = s.project!.maps[s.currentMapId!]!.objects.find((o) => o.id === "npc-1")!;
+    expect(npc.props).not.toMatchObject({ dialog: "__create__" });
+    expect(typeof (npc.props as { dialog?: unknown }).dialog).toBe("string");
+    expect(s.activeDialogId).toBe((npc.props as { dialog?: string }).dialog);
+    expect(s.project!.manifest.dialogs.length).toBe(2);
+  });
+
+  it("offers Create a dialog… when no dialogs exist", async () => {
+    const store = await openStore();
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    act(() => store.selectObject("npc-1"));
+    render(<ObjectInspector store={store} />);
+    const select = screen.getByLabelText("Dialog") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["None", "Create a dialog…"]);
   });
 
   it("renames on blur only", async () => {
@@ -155,7 +200,7 @@ describe("ObjectInspector: NPC", () => {
     const name = screen.getByLabelText("Name");
     fireEvent.change(name, { target: { value: "Cat" } });
     const get = () => store.getState().project!.maps[store.getState().currentMapId!]!.objects.find((o) => o.id === "npc-1")!.props;
-    expect(get()).toMatchObject({ name: "NPC 1" });
+    expect(get()).toMatchObject({ name: "Character 1" });
     fireEvent.blur(name);
     expect(get()).toMatchObject({ name: "Cat" });
   });

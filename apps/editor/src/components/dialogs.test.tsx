@@ -72,12 +72,33 @@ describe("DialogsView list", () => {
   it("shows a friendly empty state and creates the first dialog", async () => {
     const store = await openStore();
     render(<DialogsView store={store} />);
-    expect(screen.getByText("Create your first dialog")).toBeTruthy();
+    expect(screen.getByText("No dialogs yet")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("New dialog name"), { target: { value: "Intro" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dialog" }));
     expect(store.getState().project!.dialogs["intro"]!.name).toBe("Intro");
     expect(store.getState().activeDialogId).toBe("intro");
-    expect(screen.queryByText("Create your first dialog")).toBeNull();
+    expect(screen.queryByText("No dialogs yet")).toBeNull();
+  });
+
+  it("the empty-state button creates and selects a dialog", async () => {
+    const store = await openStore();
+    render(<DialogsView store={store} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create your first dialog" }));
+    const s = store.getState();
+    expect(s.project!.manifest.dialogs.length).toBe(1);
+    expect(s.activeDialogId).toBe(s.project!.manifest.dialogs[0]!.id);
+    expect(s.project!.dialogs[s.activeDialogId!]!.name).toBe("First talk");
+  });
+
+  it("disables the empty-state button while playing", async () => {
+    const store = await openStore();
+    store.selectTool("spawn");
+    store.placeObjectAt(0, 0);
+    render(<DialogsView store={store} />);
+    act(() => {
+      expect(store.play()).toBe(true);
+    });
+    expect((screen.getByRole("button", { name: "Create your first dialog" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("selects a dialog from the list", async () => {

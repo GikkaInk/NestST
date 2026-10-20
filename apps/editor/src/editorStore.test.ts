@@ -790,7 +790,7 @@ describe("objects, solid tiles and play", () => {
     expect(store.placeObjectAt(4, 3)).toBe(true);
     const npcs = objectsOf(store).filter((o) => o.kind === "npc");
     expect(npcs.map((o) => o.id)).toEqual(["npc-1", "npc-2"]);
-    expect(npcs[1]!.props).toMatchObject({ name: "NPC 2" });
+    expect(npcs[1]!.props).toMatchObject({ name: "Character 2" });
     expect(store.getState().dirty).toBe(true);
     store.undo();
     expect(objectsOf(store).filter((o) => o.kind === "npc").length).toBe(1);
@@ -1017,7 +1017,7 @@ describe("M2c: selection, event props, variables, dialogs, views", () => {
   it("defaultEventProps: self-teleport without dialogs, first dialog otherwise, smallest unused name", () => {
     const project = createEmptyProject("P");
     expect(defaultEventProps(project, "main", 3, 4)).toEqual({
-      name: "Event 1",
+      name: "Trigger 1",
       trigger: "touch",
       once: false,
       actions: [{ type: "teleport", map: "main", x: 3, y: 4 }],
@@ -1030,13 +1030,13 @@ describe("M2c: selection, event props, variables, dialogs, views", () => {
         main: {
           ...map,
           objects: [
-            { id: "a", kind: "event", x: 0, y: 0, props: { name: "Event 1" } },
-            { id: "b", kind: "event", x: 1, y: 0, props: { name: "Event 3" } },
+            { id: "a", kind: "event", x: 0, y: 0, props: { name: "Trigger 1" } },
+            { id: "b", kind: "event", x: 1, y: 0, props: { name: "Trigger 3" } },
           ],
         },
       },
     };
-    expect(defaultEventProps(withObjs as never, "main", 0, 0).name).toBe("Event 2");
+    expect(defaultEventProps(withObjs as never, "main", 0, 0).name).toBe("Trigger 2");
     const dlg = { schemaVersion: 1, id: "hello", name: "Hello", start: null, nodes: [] };
     const withDialog = { ...project, dialogs: { hello: dlg } } as never;
     expect(defaultEventProps(withDialog, "main", 0, 0).actions).toEqual([{ type: "dialog", dialog: "hello" }]);
@@ -1047,7 +1047,7 @@ describe("M2c: selection, event props, variables, dialogs, views", () => {
     store.selectTool("event");
     expect(store.placeObjectAt(2, 2)).toBe(true);
     const ev = objectsOf(store).find((o) => o.kind === "event")!;
-    expect(ev.props).toMatchObject({ name: "Event 1", trigger: "touch", once: false });
+    expect(ev.props).toMatchObject({ name: "Trigger 1", trigger: "touch", once: false });
     expect(store.selectObjectAt(2, 2)).toBe(true);
     expect(sel(store)).toBe(ev.id);
     store.undo();
@@ -1094,7 +1094,7 @@ describe("M2c: selection, event props, variables, dialogs, views", () => {
     expect(objectsOf(store)[0]!.props).toMatchObject({ name: "Bob" });
     expect(store.getState().dirty).toBe(true);
     store.undo();
-    expect(objectsOf(store)[0]!.props).toMatchObject({ name: "NPC 1" });
+    expect(objectsOf(store)[0]!.props).toMatchObject({ name: "Character 1" });
     expect(store.setObjectProps("npc-1", { name: "x", dialog: "missing" })).toBe(false);
     expect(store.getState().error).toMatch(/^Could not change that object\. /);
     expect(store.getState().mode).toBe("idle");
@@ -1343,9 +1343,9 @@ describe("newDialogForObject", () => {
     expect(id).not.toBeNull();
     const s = store.getState();
     const d = s.project!.dialogs[id!]!;
-    expect(d.name).toBe("NPC 1 talks");
+    expect(d.name).toBe("Character 1 talks");
     expect(d.start).toBe("n1");
-    expect(d.nodes).toEqual([{ id: "n1", x: 40, y: 40, type: "say", speaker: "NPC 1", text: "Hello!", next: null }]);
+    expect(d.nodes).toEqual([{ id: "n1", x: 40, y: 40, type: "say", speaker: "Character 1", text: "Hello!", next: null }]);
     expect(npcOf(store).props["dialog"]).toBe(id);
     expect(s.activeDialogId).toBe(id);
     expect(s.view).toBe("dialogs");
