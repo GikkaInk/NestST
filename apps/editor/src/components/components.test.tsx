@@ -329,6 +329,19 @@ describe("Toolbar: visible reason and labels", () => {
     expect(screen.queryByText("Place a start point first")).toBeNull();
   });
 
+  it("shows the broken-references reason when refProblems is not empty", async () => {
+    const store = await openStore();
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+    });
+    const patched = { ...store.getState(), refProblems: ["Something is missing"] };
+    vi.spyOn(store, "getState").mockReturnValue(patched);
+    renderBar(store);
+    expect(screen.getByText("Fix the broken references first")).toBeTruthy();
+    vi.restoreAllMocks();
+  });
+
   it("labels the object tools with visible text", async () => {
     const store = await openStore();
     renderBar(store);
@@ -346,6 +359,12 @@ describe("ToolHint", () => {
     expect(screen.getByText(TOOL_HINTS[store.getState().tool])).toBeTruthy();
     act(() => store.selectTool("spawn"));
     expect(screen.getByText("Start point: this is where your hero appears")).toBeTruthy();
+  });
+
+  it("is plain text, not a live region", async () => {
+    const store = await openStore();
+    render(<ToolHint store={store} />);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });
 

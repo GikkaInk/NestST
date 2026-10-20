@@ -1,6 +1,7 @@
 import { MAX_EVENT_ACTIONS } from "@nestst/core";
 import type { EventAction, Project } from "@nestst/core";
 import { checkNumber, checkTeleport, defaultAction } from "../editorForms.js";
+import { LABELS } from "../labels.js";
 import { CommitField, Labeled, SelectField, ValueField } from "./fields.js";
 
 interface Props {
@@ -145,7 +146,7 @@ export function ActionListEditor({ actions, project, mapId, disabled, onChange, 
                   type="button"
                   className="icon-button"
                   aria-label={`Remove action ${i + 1}`}
-                  title={actions.length === 1 ? "An event needs at least one action" : "Remove"}
+                  title={actions.length === 1 ? LABELS.triggerNeedsAction : "Remove"}
                   disabled={disabled || actions.length === 1}
                   onClick={() => onChange(actions.filter((_, j) => j !== i))}
                 >
@@ -166,7 +167,7 @@ export function ActionListEditor({ actions, project, mapId, disabled, onChange, 
               type="button"
               className="button button--small"
               disabled={disabled || full || created === null}
-              title={full ? `An event can have at most ${MAX_EVENT_ACTIONS} actions` : created === null ? k.missing : undefined}
+              title={full ? LABELS.triggerMaxActions(MAX_EVENT_ACTIONS) : created === null ? k.missing : undefined}
               onClick={() => created && onChange([...actions, created])}
             >
               {k.label}

@@ -7,7 +7,7 @@ export function ToolHint({ store }: { store: EditorStore }) {
   const s = useEditorState(store);
   if (s.project === null) return null;
   return (
-    <p className="tool-hint" role="status">
+    <p className="tool-hint">
       {TOOL_HINTS[s.tool]}
     </p>
   );

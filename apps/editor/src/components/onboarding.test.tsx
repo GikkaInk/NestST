@@ -102,11 +102,49 @@ describe("OnboardingPanel", () => {
     render(<OnboardingPanel store={store} />);
     expect(btn("Play: Press Play").disabled).toBe(true);
     expect(screen.getByText("Place a start point first")).toBeTruthy();
-    act(() => addSpawn(store));
+    act(() => {
+      addSpawn(store);
+      addNpc(store);
+    });
     expect(btn("Play: Press Play").disabled).toBe(false);
     expect(screen.queryByText("Place a start point first")).toBeNull();
     fireEvent.click(btn("Play: Press Play"));
     expect(store.getState().mode).toBe("playing");
+  });
+
+  it("Play step is blocked until a character exists, with a visible reason", async () => {
+    const store = await openStore();
+    act(() => addSpawn(store));
+    render(<OnboardingPanel store={store} />);
+    expect(btn("Play: Press Play").disabled).toBe(true);
+    expect(screen.getByText("Add a character first")).toBeTruthy();
+    act(() => addNpc(store));
+    expect(btn("Play: Press Play").disabled).toBe(false);
+    expect(screen.queryByText("Add a character first")).toBeNull();
+  });
+
+  it("exposes done / to do text for each step", async () => {
+    const store = await openStore();
+    paint(store);
+    render(<OnboardingPanel store={store} />);
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]!.textContent).toContain("Done");
+    expect(items[1]!.textContent).toContain("To do");
+  });
+
+  it("can be collapsed and expanded at any time, showing progress", async () => {
+    const store = await openStore();
+    paint(store);
+    render(<OnboardingPanel store={store} />);
+    const hide = btn("Hide first steps");
+    expect(hide.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(hide);
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(screen.getByText(/1 of 5 done/)).toBeTruthy();
+    const show = btn("Show first steps");
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(show);
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
   });
 
   it("collapses to \"All set!\" when all done and \"Show again\" expands", async () => {
@@ -159,7 +197,7 @@ describe("OnboardingPanel", () => {
     store.play();
     render(<OnboardingPanel store={store} />);
     for (const b of screen.getAllByRole("button")) {
-      if (b.getAttribute("aria-label") === "Close first steps") continue;
+      if (b.getAttribute("aria-label") === "Close first steps" || b.textContent === "Hide first steps") continue;
       expect((b as HTMLButtonElement).disabled).toBe(true);
     }
   });

@@ -40,6 +40,28 @@ export function OnboardingPanel({ store }: { store: EditorStore }) {
     );
   }
 
+  const doneCount = steps.filter((x) => x.done).length;
+  if (!open) {
+    return (
+      <section className="onboarding onboarding--done" aria-label={LABELS.onboardingTitle}>
+        <span className="onboarding__title">
+          {LABELS.onboardingTitle} · {LABELS.onboardingProgress(doneCount, steps.length)}
+        </span>
+        <button
+          type="button"
+          className="onboarding__btn"
+          aria-expanded={false}
+          onClick={() => setExpanded(true)}
+        >
+          {LABELS.onboardingExpand}
+        </button>
+        <button type="button" className="onboarding__close" aria-label={LABELS.onboardingClose} onClick={close}>
+          ×
+        </button>
+      </section>
+    );
+  }
+
   const target = findLineTarget(s);
   const act = (id: OnboardingStepId) => {
     if (id === "ground") store.selectTool("brush");
@@ -49,18 +71,25 @@ export function OnboardingPanel({ store }: { store: EditorStore }) {
       if (target !== null) store.newDialogForObject(target.objectId);
     } else store.play();
   };
-  const reasonFor = (id: OnboardingStepId): string | null =>
-    id === "line" && target === null ? LABELS.onboardingNeedCharacter : id === "play" ? playBlockedReason(s) : null;
+  const characterDone = steps.find((x) => x.id === "character")!.done;
+  const reasonFor = (id: OnboardingStepId): string | null => {
+    if (id === "line") return target === null ? LABELS.onboardingNeedCharacter : null;
+    if (id === "play") return playBlockedReason(s) ?? (characterDone ? null : LABELS.onboardingNeedCharacterFirst);
+    return null;
+  };
 
   return (
     <section className="onboarding" aria-label={LABELS.onboardingTitle}>
       <div className="onboarding__head">
         <h2 className="onboarding__title">{LABELS.onboardingTitle}</h2>
-        {complete && (
-          <button type="button" className="onboarding__btn" onClick={() => setExpanded(false)}>
-            {LABELS.onboardingCollapse}
-          </button>
-        )}
+        <button
+          type="button"
+          className="onboarding__btn"
+          aria-expanded={true}
+          onClick={() => setExpanded(false)}
+        >
+          {LABELS.onboardingCollapseSteps}
+        </button>
         <button type="button" className="onboarding__close" aria-label={LABELS.onboardingClose} onClick={close}>
           ×
         </button>
@@ -74,6 +103,7 @@ export function OnboardingPanel({ store }: { store: EditorStore }) {
               <span className="onboarding__check" aria-hidden="true">
                 {step.done ? "✓" : "○"}
               </span>
+              <span className="visually-hidden">{step.done ? LABELS.onboardingDone : LABELS.onboardingTodo}</span>
               <span className="onboarding__text">{l.text}</span>
               {!step.done && (
                 <button
