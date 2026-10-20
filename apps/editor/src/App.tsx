@@ -9,6 +9,7 @@ import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
 import { RefProblemsBanner } from "./components/RefProblemsBanner.js";
 import { MapEditor } from "./components/MapEditor.js";
+import { OnboardingPanel } from "./components/OnboardingPanel.js";
 import { ObjectInspector } from "./components/ObjectInspector.js";
 import { Palette } from "./components/Palette.js";
 import { StartScreen } from "./components/StartScreen.js";
@@ -163,7 +164,10 @@ export function App({ store }: { store: EditorStore }) {
             {s.mode === "playing" ? (
               <PlayView store={store} />
             ) : (
-              <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
+              <div className="map-column">
+                <OnboardingPanel store={store} />
+                <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
+              </div>
             )}
             <ObjectInspector store={store} />
           </main>

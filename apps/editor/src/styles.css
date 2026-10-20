@@ -1268,3 +1268,106 @@ p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ---------- First steps panel ---------- */
+.map-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  min-height: 0;
+}
+
+.map-column > .stage {
+  flex: 1;
+}
+
+.onboarding {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-soft);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-small);
+}
+
+.onboarding--done {
+  flex-direction: row;
+  align-items: center;
+  background: var(--notice-bg);
+  color: var(--primary-text);
+}
+
+.onboarding__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding__title {
+  margin: 0;
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.onboarding__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding__step[data-done="true"] .onboarding__text {
+  color: var(--text-soft);
+  text-decoration: line-through;
+}
+
+.onboarding__check {
+  font-weight: 800;
+}
+
+.onboarding__reason {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.onboarding__btn,
+.onboarding__close {
+  font: inherit;
+  color: var(--primary-text);
+  background: var(--pink);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.onboarding__close {
+  margin-left: auto;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+
+.onboarding__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.onboarding__btn:focus-visible,
+.onboarding__close:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}

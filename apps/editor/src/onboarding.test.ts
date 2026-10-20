@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject } from "@nestst/core";
 import type { Dialog, MapObject, Project } from "@nestst/core";
-import { allDone, getOnboardingSteps } from "./onboarding.js";
+import { allDone, findLineTarget, getOnboardingSteps } from "./onboarding.js";
 
 type Input = Parameters<typeof getOnboardingSteps>[0];
 
@@ -104,5 +104,27 @@ describe("getOnboardingSteps", () => {
     const steps = getOnboardingSteps(input(p, { playedOnce: true }));
     expect(allDone(steps)).toBe(true);
     expect(allDone(getOnboardingSteps(input(p)))).toBe(false);
+  });
+});
+
+describe("findLineTarget", () => {
+  it("null without project or npcs", () => {
+    expect(findLineTarget(input(null))).toBeNull();
+    expect(findLineTarget(input(createEmptyProject("P")))).toBeNull();
+  });
+  it("picks the first npc without a working dialog on the current map", () => {
+    const p = withObject(createEmptyProject("P"), npc());
+    expect(findLineTarget(input(p))).toEqual({ mapId: "main", objectId: "npc-1" });
+  });
+  it("skips npcs that already talk", () => {
+    const p = addDialog(createEmptyProject("P"), [{ type: "say" }] as unknown as Dialog["nodes"]);
+    withObject(p, npc("d1"));
+    withObject(p, { ...npc(), id: "npc-2" });
+    expect(findLineTarget(input(p))).toEqual({ mapId: "main", objectId: "npc-2" });
+  });
+  it("falls back to another map", () => {
+    const p = createEmptyProject("P");
+    p.maps["other"] = { ...structuredClone(p.maps["main"]!), objects: [{ ...npc(), id: "npc-9" }] };
+    expect(findLineTarget(input(p))).toEqual({ mapId: "other", objectId: "npc-9" });
   });
 });
