@@ -4,14 +4,20 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)
-![Status: early development](https://img.shields.io/badge/status-early%20development-orange.svg)
-![M2: play, dialogue and events](https://img.shields.io/badge/M2-play%2C%20dialogue%20%26%20events-brightgreen.svg)
+![Status: on pause](https://img.shields.io/badge/status-on%20pause-9b87c9.svg)
+![Reached: M2.5, play, dialogue, events and onboarding](https://img.shields.io/badge/reached-M2.5-brightgreen.svg)
 
 **A lightweight, open-source 2D game maker for Linux, so anyone can tell their story as a game. No programming required.**
 
 </div>
 
-> 🪺 **Early days, honestly.** You can already make a tiny playable story: paint a map, place a player start and NPCs, write branching dialogue, set up events and press Play. Graphics are still flat-colour placeholders; real images and the AI studio come next. We try to be clear about what is verified and what is not.
+<div align="center">
+
+<img src="docs/images/nestst-paused.svg" alt="A fluffy baby bird sleeps in a nest under a crescent moon. NestST is resting: the nest stays warm, the project is on pause for now." width="100%">
+
+</div>
+
+> 🪺 **On pause, honestly.** NestST is on hold for an indefinite time. Nothing is broken or abandoned in a messy way: everything built so far (the editor, Play preview, branching dialogue, events and a first-steps guide for newcomers) works and stays here as it was left. Real graphics and the AI studio were the next steps and have not been started. Issues and pull requests may wait a long time for an answer. If you want to take it further, you are very welcome to fork it (MIT).
 
 ## ♡ The idea
 
@@ -23,9 +29,10 @@ NestST is for people who have a story but don't want to write code: storytellers
 
 </div>
 
-- **Visual map editor:** tiles, walls and water you can't walk through, NPCs, player start, undo/redo.
+- **Visual map editor:** tiles, walls and water you can't walk through, characters, a start point, undo/redo.
 - **Dialogue and events without code:** branching dialogue in a node editor, variables, and simple "event → condition → action" blocks (start a dialogue, change a variable, teleport to another map). Quests are planned.
 - **Play button:** walk around your map right inside the editor and talk to your characters.
+- **A first-steps guide:** a small checklist in the editor walks a newcomer from an empty map to a playable scene, and the start screen can open a finished example.
 - **AI image studio:** portraits, icons and sprites, reviewed by you before they enter the project. Opt-in, bring your own key. The editor and your games work fine without AI.
 - **Lightweight:** a native Linux app (Tauri); games can run in the browser too.
 - **Open:** MIT license, a versioned project format with safe migrations. Your games belong to you.
@@ -62,9 +69,10 @@ pnpm -F @nestst/editor tauri build --no-bundle   # release binary: apps/editor/s
 
 What you can do right now:
 
+- **Follow the first-steps panel** on the Map tab: draw some ground, place the start point, add a character, write them a line, press Play. Or press **Try an example** on the start screen to open the finished Lost Cat game in a folder of your own.
 - **Create a project** in a folder you pick, or **open** an existing one (older projects are upgraded automatically, and the old files are backed up first).
-- **Paint tiles** with the brush and the eraser (32 built-in coloured tiles for now; your own images come later). Mark a tile **Blocks walking** to make walls and water.
-- **Place objects:** a player **Spawn** (P), **NPC**s (N) and **Event**s (T); select one (V) to edit its name, dialogue, trigger, condition and actions.
+- **Paint tiles** with the brush and the eraser (32 built-in coloured tiles for now; your own images come later). Mark a tile **Can't walk through** to make walls and water.
+- **Place objects:** a **Start point** (P), **Characters** (N) and **Trigger tiles** (T); select one (V) to edit its name, dialogue, trigger, condition and actions.
 - **Variables** tab: flags and numbers your story can remember. **Dialogs** tab: build branching dialogue as connected nodes (say, choice, set variable, branch).
 - **Play** (F5): walk with the arrow keys or WASD, talk with Space / Enter / Z, stop with Esc.
 - **Undo / redo** (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y), **save** (Ctrl+S). Shortcuts also work on a Russian keyboard layout.
@@ -82,8 +90,9 @@ Not there yet: images instead of coloured shapes, quests, items and inventory, s
 | M0 | Risk prototype: Tauri + PixiJS + node editor, measurements | ✅ done ([report](docs/m0-report.md)) |
 | M1 | Project core, versioned format, map rendering, map editor with undo/redo | ✅ done and hands-on checked ([report](docs/m1-report.md)) |
 | M2 | Player and NPCs, Play preview, events, branching dialogue, variables, teleports, two example games | ✅ done |
-| M3 | AI studio: generate, review, import | ⏳ |
-| M4 | Items, inventory, JRPG template, export | ⏳ |
+| M2.5 | UX and onboarding: first-steps panel, friendlier names, clear empty screens, a one-click example | ✅ built, not yet hands-on checked |
+| M3 | AI studio: generate, review, import | 💤 paused |
+| M4 | Items, inventory, JRPG template, export | 💤 paused |
 
 More: [research](docs/research.md), [M0 report](docs/m0-report.md), [M1 report](docs/m1-report.md). *(The in-depth docs are currently written in Russian; they will be translated as the project matures.)*
 
@@ -111,7 +120,7 @@ In the window: **M** toggles the map size (200↔1000), **G** switches between t
 
 ## 🤝 Contributing
 
-The project is just taking shape, but ideas and feedback are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [issue templates](.github/ISSUE_TEMPLATE).
+The project is on pause (see the top of this page), so replies may take a long time. Ideas and forks are still welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [issue templates](.github/ISSUE_TEMPLATE).
 
 ## License
 

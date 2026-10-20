@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="t d">
+  <title id="t">NestST is resting</title>
+  <desc id="d">A fluffy baby bird sleeps in a woven nest under a crescent moon, with floating Z letters. Text: NestST is resting. The nest stays warm; the project is on pause.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fde8ef"/>
+      <stop offset="0.55" stop-color="#efe6fb"/>
+      <stop offset="1" stop-color="#dcecf9"/>
+    </linearGradient>
+    <linearGradient id="nest" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9a877"/>
+      <stop offset="1" stop-color="#a9764a"/>
+    </linearGradient>
+    <radialGradient id="bird" cx="0.4" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#fff6c9"/>
+      <stop offset="1" stop-color="#ffd978"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="420" rx="28" fill="url(#sky)"/>
+
+  <!-- stars -->
+  <g fill="#ffffff" opacity="0.9">
+    <circle cx="90" cy="70" r="3"/><circle cx="210" cy="130" r="2"/><circle cx="330" cy="50" r="3"/>
+    <circle cx="470" cy="110" r="2"/><circle cx="1010" cy="60" r="3"/><circle cx="1120" cy="140" r="2"/>
+    <circle cx="930" cy="150" r="2"/><circle cx="60" cy="230" r="2"/>
+  </g>
+
+  <!-- crescent moon -->
+  <g transform="translate(1040 100)">
+    <circle r="44" fill="#fff3b8"/>
+    <circle cx="18" cy="-10" r="40" fill="#efe6fb"/>
+  </g>
+
+  <!-- nest + bird -->
+  <g transform="translate(250 230)">
+    <ellipse cx="0" cy="118" rx="150" ry="22" fill="#000" opacity="0.08"/>
+    <!-- back of nest -->
+    <path d="M-140 40 Q0 -10 140 40 L128 90 Q0 150 -128 90 Z" fill="#b98457"/>
+    <!-- bird body -->
+    <ellipse cx="0" cy="30" rx="82" ry="72" fill="url(#bird)"/>
+    <!-- tuft -->
+    <path d="M-6 -42 Q-2 -64 10 -50 Q18 -62 22 -44" fill="none" stroke="#ffd978" stroke-width="7" stroke-linecap="round"/>
+    <!-- cheeks -->
+    <ellipse cx="-42" cy="42" rx="14" ry="9" fill="#ffb3c7" opacity="0.8"/>
+    <ellipse cx="42" cy="42" rx="14" ry="9" fill="#ffb3c7" opacity="0.8"/>
+    <!-- sleeping eyes -->
+    <path d="M-38 24 Q-26 36 -14 24" fill="none" stroke="#6b4a3a" stroke-width="5" stroke-linecap="round"/>
+    <path d="M14 24 Q26 36 38 24" fill="none" stroke="#6b4a3a" stroke-width="5" stroke-linecap="round"/>
+    <!-- beak -->
+    <path d="M-9 40 L9 40 L0 54 Z" fill="#ff9a62"/>
+    <!-- front of nest -->
+    <path d="M-150 60 Q0 110 150 60 L134 100 Q0 166 -134 100 Z" fill="url(#nest)"/>
+    <g fill="none" stroke="#8b5a33" stroke-width="3" stroke-linecap="round" opacity="0.7">
+      <path d="M-120 82 Q-60 112 0 114"/>
+      <path d="M-90 100 Q-30 124 40 122"/>
+      <path d="M120 82 Q60 112 0 114"/>
+      <path d="M90 100 Q30 124 -40 122"/>
+    </g>
+  </g>
+
+  <!-- Zzz -->
+  <g fill="#9b87c9" font-family="Georgia, 'Times New Roman', serif" font-weight="700">
+    <text x="355" y="150" font-size="38">Z</text>
+    <text x="395" y="115" font-size="28" opacity="0.85">z</text>
+    <text x="425" y="88" font-size="20" opacity="0.7">z</text>
+  </g>
+
+  <!-- text -->
+  <g font-family="'Segoe UI', 'Noto Sans', Arial, sans-serif">
+    <text x="520" y="190" font-size="54" font-weight="700" fill="#5a4a7a">NestST is resting</text>
+    <text x="522" y="240" font-size="26" fill="#7a6a98">The nest stays warm. The project is on pause for now.</text>
+    <text x="522" y="290" font-size="22" fill="#9a8ab8">巣 · everything built so far is still here, ready to wake up</text>
+  </g>
+</svg>
