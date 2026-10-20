@@ -19,23 +19,12 @@ function hasWorkingDialog(project: Project, o: MapObject): boolean {
   return project.dialogs[id]!.nodes.some((n) => n.type === "say");
 }
 
-/**
- * Character that step 4 should write a line for: the first npc without a working dialog on the
- * current map, else the first such npc on any map, else null.
- */
+/** Character that step 4 should write a line for: the first npc without a working dialog on the current map, else null. */
 export function findLineTarget(s: Pick<OnboardingInput, "project" | "currentMapId">): { mapId: string; objectId: string } | null {
   const project = s.project;
-  if (project === null) return null;
-  const entries = Object.entries(project.maps);
-  const ordered = [
-    ...entries.filter(([id]) => id === s.currentMapId),
-    ...entries.filter(([id]) => id !== s.currentMapId),
-  ];
-  for (const [mapId, map] of ordered) {
-    const o = map.objects.find((x) => x.kind === "npc" && !hasWorkingDialog(project, x));
-    if (o !== undefined) return { mapId, objectId: o.id };
-  }
-  return null;
+  if (project === null || s.currentMapId === null || !Object.hasOwn(project.maps, s.currentMapId)) return null;
+  const o = project.maps[s.currentMapId]!.objects.find((x) => x.kind === "npc" && !hasWorkingDialog(project, x));
+  return o === undefined ? null : { mapId: s.currentMapId, objectId: o.id };
 }
 
 /** Onboarding checklist, always five steps in this order. Never throws on a missing map or dangling dialog id. */

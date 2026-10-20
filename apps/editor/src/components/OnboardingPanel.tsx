@@ -87,7 +87,7 @@ export function OnboardingPanel({ store }: { store: EditorStore }) {
                 <button
                   type="button"
                   className="onboarding__btn"
-                  aria-label={l.text}
+                  aria-label={`${l.action}: ${l.text}`}
                   disabled={!editable || reason !== null}
                   onClick={() => act(step.id)}
                 >

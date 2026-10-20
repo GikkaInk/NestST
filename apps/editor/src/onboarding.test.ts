@@ -122,9 +122,9 @@ describe("findLineTarget", () => {
     withObject(p, { ...npc(), id: "npc-2" });
     expect(findLineTarget(input(p))).toEqual({ mapId: "main", objectId: "npc-2" });
   });
-  it("falls back to another map", () => {
+  it("returns null when the only unfinished NPC is on another map", () => {
     const p = createEmptyProject("P");
     p.maps["other"] = { ...structuredClone(p.maps["main"]!), objects: [{ ...npc(), id: "npc-9" }] };
-    expect(findLineTarget(input(p))).toEqual({ mapId: "other", objectId: "npc-9" });
+    expect(findLineTarget(input(p))).toBeNull();
   });
 });

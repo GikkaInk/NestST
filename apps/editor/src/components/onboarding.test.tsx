@@ -51,18 +51,18 @@ describe("OnboardingPanel", () => {
     paint(store);
     render(<OnboardingPanel store={store} />);
     expect(screen.getAllByRole("listitem")[0]!.getAttribute("data-done")).toBe("true");
-    expect(screen.queryByRole("button", { name: "Draw some ground" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Draw: Draw some ground" })).toBeNull();
     expect(screen.getAllByRole("listitem")[1]!.getAttribute("data-done")).toBe("false");
   });
 
   it("step action buttons select tool brush/spawn/npc", async () => {
     const store = await openStore();
     render(<OnboardingPanel store={store} />);
-    fireEvent.click(btn("Place the start point"));
+    fireEvent.click(btn("Place it: Place the start point"));
     expect(store.getState().tool).toBe("spawn");
-    fireEvent.click(btn("Add a character"));
+    fireEvent.click(btn("Add one: Add a character"));
     expect(store.getState().tool).toBe("npc");
-    fireEvent.click(btn("Draw some ground"));
+    fireEvent.click(btn("Draw: Draw some ground"));
     expect(store.getState().tool).toBe("brush");
   });
 
@@ -70,7 +70,7 @@ describe("OnboardingPanel", () => {
     const store = await openStore();
     addNpc(store);
     render(<OnboardingPanel store={store} />);
-    fireEvent.click(btn("Write them a line"));
+    fireEvent.click(btn("Write a line: Write them a line"));
     const s = store.getState();
     expect(s.view).toBe("dialogs");
     const map = s.project!.maps[s.currentMapId!]!;
@@ -80,19 +80,32 @@ describe("OnboardingPanel", () => {
   it("line step is inactive with a reason when there is no character", async () => {
     const store = await openStore();
     render(<OnboardingPanel store={store} />);
-    expect(btn("Write them a line").disabled).toBe(true);
-    expect(screen.getByText("Add a character first")).toBeTruthy();
+    expect(btn("Write a line: Write them a line").disabled).toBe(true);
+    expect(screen.getByText("Add a character on this map first")).toBeTruthy();
+  });
+
+  it("line step is disabled with a reason when the only npc is on another map", async () => {
+    const store = await openStore();
+    const project = structuredClone(store.getState().project!);
+    const other = structuredClone(project.maps[store.getState().currentMapId!]!);
+    other.objects = [{ id: "npc-9", kind: "npc", x: 0, y: 0, props: { name: "Far" } }];
+    project.maps["other"] = other;
+    const patched = { ...store.getState(), project };
+    vi.spyOn(store, "getState").mockReturnValue(patched);
+    render(<OnboardingPanel store={store} />);
+    expect(btn("Write a line: Write them a line").disabled).toBe(true);
+    expect(screen.getByText("Add a character on this map first")).toBeTruthy();
   });
 
   it("Play step button disabled with text reason until start point exists", async () => {
     const store = await openStore();
     render(<OnboardingPanel store={store} />);
-    expect(btn("Press Play").disabled).toBe(true);
+    expect(btn("Play: Press Play").disabled).toBe(true);
     expect(screen.getByText("Place a Start point first")).toBeTruthy();
     act(() => addSpawn(store));
-    expect(btn("Press Play").disabled).toBe(false);
+    expect(btn("Play: Press Play").disabled).toBe(false);
     expect(screen.queryByText("Place a Start point first")).toBeNull();
-    fireEvent.click(btn("Press Play"));
+    fireEvent.click(btn("Play: Press Play"));
     expect(store.getState().mode).toBe("playing");
   });
 

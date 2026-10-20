@@ -28,7 +28,7 @@ export const LABELS = {
   onboardingShowAgain: "Show again",
   onboardingClose: "Close first steps",
   onboardingCollapse: "Hide",
-  onboardingNeedCharacter: "Add a character first",
+  onboardingNeedCharacter: "Add a character on this map first",
   onboardingFixRefs: "Fix the broken references first",
 } as const;
 
