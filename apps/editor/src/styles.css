@@ -394,16 +394,23 @@ p {
   margin-top: auto;
 }
 
-.start__card--mint {
+.start__card--mint,
+.start__card--peach {
   background: var(--mint);
   color: var(--ink);
 }
 
-.start__card--mint .field-hint {
+.start__card--peach {
+  background: var(--peach);
+}
+
+.start__card--mint .field-hint,
+.start__card--peach .field-hint {
   color: #4f5f5a;
 }
 
-.start__card--mint .button {
+.start__card--mint .button,
+.start__card--peach .button {
   color: var(--ink);
   background: #ffffff;
   border-color: var(--ink);

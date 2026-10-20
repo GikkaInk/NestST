@@ -177,6 +177,8 @@ export interface EditorStore {
   subscribe(listener: () => void): () => void;
   /** Asks for a folder, creates the project there and saves it. True on success. */
   newProject(name: string): Promise<boolean>;
+  /** Asks for an empty folder, copies the example files into it and opens it. True on success. */
+  openExample(files: Readonly<Record<string, string>>): Promise<boolean>;
   /** Asks for a folder and loads the project from it. True on success. */
   open(): Promise<boolean>;
   save(): Promise<boolean>;
@@ -492,6 +494,52 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       } catch (e) {
         return fail("Could not save the new project. ", e);
       }
+      adopt(project, picked);
+      return true;
+    },
+
+    async openExample(files) {
+      if (isBusy(state)) return false;
+      // The manifest goes last, so a half-copied folder is not mistaken for a project.
+      const paths = Object.keys(files).sort((a, b) => Number(a === MANIFEST_FILE) - Number(b === MANIFEST_FILE));
+      const versionAtStart = version;
+      set({ mode: "dialog" });
+      const picked = await pick("pickNew");
+      if (picked === "failed") return false;
+      if (picked === null) {
+        set({ mode: "idle" });
+        return false;
+      }
+      set({ mode: "loading" });
+      if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
+      let wrote = false;
+      let project: Project;
+      try {
+        if (await picked.storage.exists(MANIFEST_FILE)) {
+          return fail(
+            "",
+            "this folder already has a NestST project. Choose an empty folder, or use Open project instead",
+          );
+        }
+        for (const path of paths) {
+          if (await picked.storage.exists(path)) {
+            return fail(
+              "",
+              `this folder already has a file ${path}, and NestST will not overwrite it. Choose an empty folder`,
+            );
+          }
+        }
+        if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
+        for (const path of paths) {
+          wrote = true;
+          await picked.storage.writeAtomic(path, files[path]!);
+        }
+        project = await loadProject(picked.storage);
+      } catch (e) {
+        const partly = wrote ? ` The folder ${picked.label} may be partly filled, so choose another empty folder to try again.` : "";
+        return fail("Could not copy the example. ", `${ensurePeriod(describe(e))}${partly}`);
+      }
+      if (version !== versionAtStart) return fail("", CHANGED_DURING_DIALOG);
       adopt(project, picked);
       return true;
     },

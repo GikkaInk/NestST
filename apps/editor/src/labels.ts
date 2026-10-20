@@ -58,3 +58,10 @@ export const ONBOARDING_LABELS: Record<"ground" | "start" | "character" | "line"
   line: { text: "Write them a line", action: "Write a line" },
   play: { text: "Press Play", action: "Play" },
 };
+
+/** Texts of the "Try an example" card on the start screen. */
+export const EXAMPLE_LABELS = {
+  title: "Try an example",
+  hint: "A tiny finished game to look at. You will pick an empty folder for your own copy.",
+  action: "Open the example…",
+} as const;

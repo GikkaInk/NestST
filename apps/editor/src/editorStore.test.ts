@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MANIFEST_FILE, createEmptyProject, loadProject, saveProject } from "@nestst/core";
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
+import { EXAMPLE_FILES } from "./exampleProject.js";
 import { getOnboardingSteps } from "./onboarding.js";
 import { canPlay, createEditorStore, defaultEventProps, isBusy, playBlockedReason, playMapId, strokeTile } from "./editorStore.js";
 import type { OpenedFolder, ProjectSession } from "./editorStore.js";
@@ -1391,5 +1392,65 @@ describe("playBlockedReason", () => {
     store.placeObjectAt(1, 1);
     expect(playBlockedReason(store.getState())).toBeNull();
     expect(playBlockedReason({ ...store.getState(), refProblems: ["x"] })).toBe("Fix the broken references first");
+  });
+});
+
+describe("openExample", () => {
+  const files = Object.fromEntries(
+    Object.entries(EXAMPLE_FILES).map(([k, v]) => [k, v] as const),
+  );
+
+  it("writes all files and opens the project", async () => {
+    const storage = new MemoryStorage();
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.openExample(files)).toBe(true);
+    const s = store.getState();
+    expect(s.project?.manifest.name).toBe("Lost Cat");
+    expect(s.mode).toBe("idle");
+    expect(s.error).toBeNull();
+    expect(s.rootLabel).toBe("/home/user/Игры/Мой проект");
+    for (const [path, text] of Object.entries(files)) expect(storage.files.get(path)).toBe(text);
+    expect(storage.writeLog[storage.writeLog.length - 1]).toBe(MANIFEST_FILE);
+  });
+
+  it("refuses a folder that already has a project", async () => {
+    const storage = new MemoryStorage({ [MANIFEST_FILE]: "keep me" });
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.openExample(files)).toBe(false);
+    expect(store.getState().project).toBeNull();
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().error).toMatch(/already/i);
+    expect(storage.files.get(MANIFEST_FILE)).toBe("keep me");
+    expect(storage.writeLog).toEqual([]);
+  });
+
+  it("refuses a folder that already has one of the example files", async () => {
+    const storage = new MemoryStorage({ "maps/village.json": "mine" });
+    const store = createEditorStore(fakeSession(folder(storage)));
+    expect(await store.openExample(files)).toBe(false);
+    expect(store.getState().error).toMatch(/already/i);
+    expect(storage.files.get("maps/village.json")).toBe("mine");
+    expect(storage.writeLog).toEqual([]);
+  });
+
+  it("failure in the middle opens nothing and reports an error", async () => {
+    const storage = new MemoryStorage();
+    storage.failOnWrite(2);
+    const store = createEditorStore(fakeSession(folder(storage, "/half")));
+    expect(await store.openExample(files)).toBe(false);
+    const s = store.getState();
+    expect(s.project).toBeNull();
+    expect(s.mode).toBe("idle");
+    expect(s.error).toMatch(/example/i);
+    expect(s.error).toContain("/half");
+    expect(storage.files.has(MANIFEST_FILE)).toBe(false);
+  });
+
+  it("cancelled dialog changes nothing", async () => {
+    const store = createEditorStore(fakeSession(null));
+    expect(await store.openExample(files)).toBe(false);
+    expect(store.getState().project).toBeNull();
+    expect(store.getState().mode).toBe("idle");
+    expect(store.getState().error).toBeNull();
   });
 });

@@ -3,6 +3,8 @@ import type { FormEvent } from "react";
 import { isBusy } from "../editorStore.js";
 import type { EditorStore } from "../editorStore.js";
 import { useEditorState } from "../useEditorState.js";
+import { EXAMPLE_FILES } from "../exampleProject.js";
+import { EXAMPLE_LABELS } from "../labels.js";
 import { IconOpen } from "./icons.js";
 
 interface Props {
@@ -28,6 +30,10 @@ export function StartScreen({ store, onDone, onBack }: Props) {
 
   const open = async () => {
     if (await store.open()) onDone?.();
+  };
+
+  const openExample = async () => {
+    if (await store.openExample(EXAMPLE_FILES)) onDone?.();
   };
 
   return (
@@ -72,6 +78,15 @@ export function StartScreen({ store, onDone, onBack }: Props) {
           <button type="button" className="button" onClick={() => void open()} disabled={busy}>
             <IconOpen />
             Open existing project…
+          </button>
+        </section>
+        <section className="card start__card start__card--peach" aria-labelledby={`${nameId}-example`}>
+          <h2 id={`${nameId}-example`} className="card__title">
+            {EXAMPLE_LABELS.title}
+          </h2>
+          <p className="field-hint">{EXAMPLE_LABELS.hint}</p>
+          <button type="button" className="button" onClick={() => void openExample()} disabled={busy}>
+            {EXAMPLE_LABELS.action}
           </button>
         </section>
       </div>
