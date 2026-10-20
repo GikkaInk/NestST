@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MANIFEST_FILE, createEmptyProject, loadProject, saveProject } from "@nestst/core";
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
+import { getOnboardingSteps } from "./onboarding.js";
 import { canPlay, createEditorStore, defaultEventProps, isBusy, playMapId, strokeTile } from "./editorStore.js";
 import type { OpenedFolder, ProjectSession } from "./editorStore.js";
 
@@ -1280,5 +1281,100 @@ describe("new dialog ids", () => {
     expect(store.newDialog("Con")).toBe("con-1");
     expect(store.newDialog("Nul")).toBe("nul-1");
     expect(store.getState().error).toBeNull();
+  });
+});
+
+describe("playedOnce", () => {
+  async function playable() {
+    const { store, storage } = await storeWithNewProject();
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    return { store, storage };
+  }
+
+  it("playedOnce false initially", async () => {
+    expect(createEditorStore(fakeSession()).getState().playedOnce).toBe(false);
+    const { store } = await storeWithNewProject();
+    expect(store.getState().playedOnce).toBe(false);
+  });
+
+  it("playedOnce true after play()", async () => {
+    const { store } = await playable();
+    expect(store.play()).toBe(true);
+    expect(store.getState().playedOnce).toBe(true);
+    store.stopPlay();
+    expect(store.getState().playedOnce).toBe(true);
+  });
+
+  it("playedOnce resets when another project is adopted", async () => {
+    const first = new MemoryStorage();
+    const store = createEditorStore(fakeSession(folder(first), folder(new MemoryStorage())));
+    expect(await store.newProject("A")).toBe(true);
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    expect(store.play()).toBe(true);
+    store.stopPlay();
+    expect(store.getState().playedOnce).toBe(true);
+    expect(await store.newProject("B")).toBe(true);
+    expect(store.getState().playedOnce).toBe(false);
+  });
+
+  it("EditorState is accepted by getOnboardingSteps without casts", async () => {
+    const { store } = await playable();
+    expect(getOnboardingSteps(store.getState()).map((s) => s.id)).toHaveLength(5);
+  });
+});
+
+describe("newDialogForObject", () => {
+  async function withNpc() {
+    const { store } = await storeWithNewProject();
+    store.selectTool("npc");
+    store.placeObjectAt(1, 1);
+    return store;
+  }
+  const npcOf = (store: ReturnType<typeof createEditorStore>) => {
+    const s = store.getState();
+    return s.project!.maps[s.currentMapId!]!.objects.find((o) => o.id === "npc-1")!;
+  };
+
+  it("newDialogForObject creates dialog, binds npc, switches to dialogs view", async () => {
+    const store = await withNpc();
+    const id = store.newDialogForObject("npc-1");
+    expect(id).not.toBeNull();
+    const s = store.getState();
+    const d = s.project!.dialogs[id!]!;
+    expect(d.name).toBe("NPC 1 talks");
+    expect(d.start).toBe("n1");
+    expect(d.nodes).toEqual([{ id: "n1", x: 40, y: 40, type: "say", speaker: "NPC 1", text: "Hello!", next: null }]);
+    expect(npcOf(store).props["dialog"]).toBe(id);
+    expect(s.activeDialogId).toBe(id);
+    expect(s.view).toBe("dialogs");
+    expect(s.error).toBeNull();
+  });
+
+  it("newDialogForObject is one undo step", async () => {
+    const store = await withNpc();
+    const before = store.getState().project;
+    const id = store.newDialogForObject("npc-1")!;
+    store.undo();
+    const s = store.getState();
+    expect(Object.hasOwn(s.project!.dialogs, id)).toBe(false);
+    expect(npcOf(store).props["dialog"]).toBeUndefined();
+    expect(s.project).toEqual(before);
+    store.redo();
+    expect(npcOf(store).props["dialog"]).toBe(id);
+    expect(Object.hasOwn(store.getState().project!.dialogs, id)).toBe(true);
+  });
+
+  it("newDialogForObject on non-npc returns null and leaves project unchanged", async () => {
+    const { store } = await storeWithNewProject();
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    const spawnId = store.getState().project!.maps[store.getState().currentMapId!]!.objects[0]!.id;
+    const before = store.getState().project;
+    expect(store.newDialogForObject(spawnId)).toBeNull();
+    expect(store.newDialogForObject("missing")).toBeNull();
+    expect(store.getState().project).toBe(before);
+    expect(store.getState().error).toMatch(/^Could not create the dialog\. /);
   });
 });

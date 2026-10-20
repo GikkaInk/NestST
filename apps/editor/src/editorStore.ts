@@ -5,6 +5,7 @@ import {
   collectProjectRefProblems,
   createEmptyProject,
   loadProject,
+  mergeCommands,
   nextNpcId,
   objectAt,
   paintCommand,
@@ -17,6 +18,7 @@ import {
   setVariablesCommand,
   upsertDialogCommand,
 } from "@nestst/core";
+import { addNode, findFreeSpot } from "./dialogGraph.js";
 import type {
   BackupFile,
   Command,
@@ -81,6 +83,8 @@ export interface EditorState {
   showSolid: boolean;
   /** Counts opened/created projects; changes only when a project is adopted. */
   openSeq: number;
+  /** True after a successful `play()`; reset when a project is adopted. */
+  playedOnce: boolean;
   /** Which editor tab is shown. Not part of the history. */
   view: EditorView;
   /** Object picked with the select tool on the current map, or null. */
@@ -182,6 +186,8 @@ export interface EditorStore {
   selectDialog(id: string | null): void;
   /** Creates an empty dialog named `name`, selects it and returns its id; null on error. */
   newDialog(name: string): string | null;
+  /** Creates a starter dialog for an NPC of the current map and binds it, as one undo step. */
+  newDialogForObject(objectId: string): string | null;
   /** Removes the object on the cell. False if there is none. */
   removeObjectAt(x: number, y: number): boolean;
   /** Marks a tile as solid or passable (through the history). */
@@ -285,6 +291,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     rootLabel: "",
     showSolid: true,
     openSeq: 0,
+    playedOnce: false,
     view: "map",
     selectedObjectId: null,
     activeDialogId: null,
@@ -360,6 +367,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       projectName: project.manifest.name,
       rootLabel: picked.label,
       openSeq: state.openSeq + 1,
+      playedOnce: false,
       view: "map",
       selectedObjectId: null,
       activeDialogId: null,
@@ -649,6 +657,36 @@ export function createEditorStore(session: ProjectSession): EditorStore {
       return created;
     },
 
+    newDialogForObject(objectId) {
+      let created: string | null = null;
+      const mapId = state.currentMapId;
+      const ok = editProject("Could not create the dialog. ", (project) => {
+        const obj = mapId !== null && Object.hasOwn(project.maps, mapId)
+          ? project.maps[mapId]!.objects.find((o) => o.id === objectId)
+          : undefined;
+        if (obj === undefined || obj.kind !== "npc") throw new Error("only a character can get a dialog");
+        const rawName = obj.props["name"];
+        const npcName = typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim() : "Character";
+        const dialogName = `${npcName} talks`.slice(0, 200);
+        const id = dialogIdFor(dialogName, (x) => Object.hasOwn(project.dialogs, x));
+        const empty: Dialog = { schemaVersion: 1, id, name: dialogName, start: null, nodes: [] };
+        const filled = addNode(empty, "say", findFreeSpot(empty));
+        const node = filled.nodes[0]!;
+        const dialog: Dialog = {
+          ...filled,
+          nodes: [{ ...node, speaker: npcName, text: "Hello!" } as typeof node],
+        };
+        const create = upsertDialogCommand(dialog, project);
+        // The binding is validated against the project that already has the dialog.
+        const bind = setObjectPropsCommand(mapId!, objectId, { ...obj.props, dialog: id }, create.apply(project));
+        created = id;
+        return mergeCommands("Add dialog for NPC", [create, bind]);
+      });
+      if (!ok || created === null) return null;
+      set({ activeDialogId: created, view: "dialogs" });
+      return created;
+    },
+
     toggleShowSolid() {
       set({ showSolid: !state.showSolid });
     },
@@ -656,7 +694,7 @@ export function createEditorStore(session: ProjectSession): EditorStore {
     play() {
       if (!canPlay(state)) return false;
       const mapId = playMapId(state)!;
-      set({ mode: "playing", playingMapId: mapId });
+      set({ mode: "playing", playingMapId: mapId, playedOnce: true });
       return true;
     },
 
