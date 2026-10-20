@@ -4,7 +4,7 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)
-![Status: on pause](https://img.shields.io/badge/status-on%20pause-9b87c9.svg)
+![Status: frozen](https://img.shields.io/badge/status-frozen%20%E2%9D%84-8ecae6.svg)
 ![Reached: M2.5, play, dialogue, events and onboarding](https://img.shields.io/badge/reached-M2.5-brightgreen.svg)
 
 **A lightweight, open-source 2D game maker for Linux, so anyone can tell their story as a game. No programming required.**
@@ -13,11 +13,11 @@
 
 <div align="center">
 
-<img src="docs/images/nestst-paused.svg" alt="A fluffy baby bird sleeps in a nest under a crescent moon. NestST is resting: the nest stays warm, the project is on pause for now." width="100%">
+<img src="docs/images/nestst-frozen.svg" alt="A fluffy baby bird sleeps in a nest under a crescent moon while snowflakes drift by. NestST is on ice: the nest stays cosy, the project is frozen for now." width="100%">
 
 </div>
 
-> 🪺 **On pause, honestly.** NestST is on hold for an indefinite time. Nothing is broken or abandoned in a messy way: everything built so far (the editor, Play preview, branching dialogue, events and a first-steps guide for newcomers) works and stays here as it was left. Real graphics and the AI studio were the next steps and have not been started. Issues and pull requests may wait a long time for an answer. If you want to take it further, you are very welcome to fork it (MIT).
+> ❄️ **Frozen, honestly.** NestST is on ice for an indefinite time. Nothing is broken or abandoned in a messy way: the project is just tucked in for the winter. Everything built so far (the editor, Play preview, branching dialogue, events and a first-steps guide for newcomers) works and stays here as it was left. Real graphics and the AI studio were the next steps and have not been started. Issues and pull requests may wait a long time for an answer. If you want to thaw it and take it further, you are very welcome to fork it (MIT).
 
 ## ♡ The idea
 
@@ -91,8 +91,8 @@ Not there yet: images instead of coloured shapes, quests, items and inventory, s
 | M1 | Project core, versioned format, map rendering, map editor with undo/redo | ✅ done and hands-on checked ([report](docs/m1-report.md)) |
 | M2 | Player and NPCs, Play preview, events, branching dialogue, variables, teleports, two example games | ✅ done |
 | M2.5 | UX and onboarding: first-steps panel, friendlier names, clear empty screens, a one-click example | ✅ built, not yet hands-on checked |
-| M3 | AI studio: generate, review, import | 💤 paused |
-| M4 | Items, inventory, JRPG template, export | 💤 paused |
+| M3 | AI studio: generate, review, import | ❄️ frozen |
+| M4 | Items, inventory, JRPG template, export | ❄️ frozen |
 
 More: [research](docs/research.md), [M0 report](docs/m0-report.md), [M1 report](docs/m1-report.md). *(The in-depth docs are currently written in Russian; they will be translated as the project matures.)*
 
@@ -120,7 +120,7 @@ In the window: **M** toggles the map size (200↔1000), **G** switches between t
 
 ## 🤝 Contributing
 
-The project is on pause (see the top of this page), so replies may take a long time. Ideas and forks are still welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [issue templates](.github/ISSUE_TEMPLATE).
+The project is frozen (see the top of this page), so replies may take a long time. Ideas and forks are still welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [issue templates](.github/ISSUE_TEMPLATE).
 
 ## License
 

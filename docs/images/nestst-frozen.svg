@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="t d">
-  <title id="t">NestST is resting</title>
-  <desc id="d">A fluffy baby bird sleeps in a woven nest under a crescent moon, with floating Z letters. Text: NestST is resting. The nest stays warm; the project is on pause.</desc>
+  <title id="t">NestST is on ice</title>
+  <desc id="d">A fluffy baby bird sleeps in a woven nest under a crescent moon, with floating Z letters and snowflakes. Text: NestST is on ice. The nest stays cosy; the project is frozen for now.</desc>
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fde8ef"/>
-      <stop offset="0.55" stop-color="#efe6fb"/>
-      <stop offset="1" stop-color="#dcecf9"/>
+      <stop offset="0" stop-color="#e8f2fd"/>
+      <stop offset="0.55" stop-color="#ece9fb"/>
+      <stop offset="1" stop-color="#d6ebf7"/>
     </linearGradient>
     <linearGradient id="nest" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#d9a877"/>
@@ -26,10 +26,21 @@
     <circle cx="930" cy="150" r="2"/><circle cx="60" cy="230" r="2"/>
   </g>
 
+
+  <!-- snowflakes -->
+  <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.95">
+    <g transform="translate(120 120)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+    <g transform="translate(470 60) scale(0.8)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+    <g transform="translate(900 120) scale(1.1)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+    <g transform="translate(70 330) scale(0.7)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+    <g transform="translate(1130 300)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+    <g transform="translate(640 360) scale(0.8)"><path d="M0-14V14M-12-7L12 7M-12 7L12-7"/></g>
+  </g>
+
   <!-- crescent moon -->
   <g transform="translate(1040 100)">
     <circle r="44" fill="#fff3b8"/>
-    <circle cx="18" cy="-10" r="40" fill="#efe6fb"/>
+    <circle cx="18" cy="-10" r="40" fill="#e9eafb"/>
   </g>
 
   <!-- nest + bird -->
@@ -68,8 +79,8 @@
 
   <!-- text -->
   <g font-family="'Segoe UI', 'Noto Sans', Arial, sans-serif">
-    <text x="520" y="190" font-size="54" font-weight="700" fill="#5a4a7a">NestST is resting</text>
-    <text x="522" y="240" font-size="26" fill="#7a6a98">The nest stays warm. The project is on pause for now.</text>
-    <text x="522" y="290" font-size="22" fill="#9a8ab8">巣 · everything built so far is still here, ready to wake up</text>
+    <text x="520" y="190" font-size="54" font-weight="700" fill="#5a4a7a">NestST is on ice ❄</text>
+    <text x="522" y="240" font-size="26" fill="#7a6a98">The nest stays cosy. The project is frozen for now.</text>
+    <text x="522" y="290" font-size="22" fill="#9a8ab8">巣 · everything built so far is kept safe, ready to thaw</text>
   </g>
 </svg>
