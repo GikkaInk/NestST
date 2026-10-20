@@ -431,6 +431,22 @@ p {
   background: var(--surface-soft);
 }
 
+.toolbar__reason {
+  max-width: 220px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.tool-hint {
+  flex: none;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
 .tool-button {
   display: inline-flex;
   align-items: center;

@@ -101,10 +101,10 @@ describe("OnboardingPanel", () => {
     const store = await openStore();
     render(<OnboardingPanel store={store} />);
     expect(btn("Play: Press Play").disabled).toBe(true);
-    expect(screen.getByText("Place a Start point first")).toBeTruthy();
+    expect(screen.getByText("Place a start point first")).toBeTruthy();
     act(() => addSpawn(store));
     expect(btn("Play: Press Play").disabled).toBe(false);
-    expect(screen.queryByText("Place a Start point first")).toBeNull();
+    expect(screen.queryByText("Place a start point first")).toBeNull();
     fireEvent.click(btn("Play: Press Play"));
     expect(store.getState().mode).toBe("playing");
   });

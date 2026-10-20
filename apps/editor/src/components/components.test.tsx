@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryStorage } from "@nestst/core/testing";
 import { createEditorStore } from "../editorStore.js";
+import { TOOL_HINTS } from "../labels.js";
 import type { EditorStore, ProjectSession } from "../editorStore.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { ErrorBanner } from "./ErrorBanner.js";
@@ -13,6 +14,7 @@ import { App } from "../App.js";
 import { PALETTE_SIZE, Palette } from "./Palette.js";
 import { StartScreen } from "./StartScreen.js";
 import { Toolbar } from "./Toolbar.js";
+import { ToolHint } from "./ToolHint.js";
 import { PlayView } from "./PlayView.js";
 import { StrictMode } from "react";
 
@@ -312,6 +314,41 @@ describe("Toolbar", () => {
   });
 });
 
+describe("Toolbar: visible reason and labels", () => {
+  const renderBar = (store: EditorStore) =>
+    render(<Toolbar store={store} zoom={1} zoomControls={null} onNew={() => {}} onOpen={() => {}} />);
+
+  it("shows the Play reason as text, and removes it once Play works", async () => {
+    const store = await openStore();
+    renderBar(store);
+    expect(screen.getByText("Place a start point first")).toBeTruthy();
+    act(() => {
+      store.selectTool("spawn");
+      store.placeObjectAt(1, 1);
+    });
+    expect(screen.queryByText("Place a start point first")).toBeNull();
+  });
+
+  it("labels the object tools with visible text", async () => {
+    const store = await openStore();
+    renderBar(store);
+    for (const name of ["Start point", "Character", "Trigger tile"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.textContent).toContain(name);
+    }
+  });
+});
+
+describe("ToolHint", () => {
+  it("shows the hint of the selected tool and follows changes", async () => {
+    const store = await openStore();
+    render(<ToolHint store={store} />);
+    expect(screen.getByText(TOOL_HINTS[store.getState().tool])).toBeTruthy();
+    act(() => store.selectTool("spawn"));
+    expect(screen.getByText("Start point: this is where your hero appears")).toBeTruthy();
+  });
+});
+
 describe("Palette", () => {
   it("shows the first 32 tiles and selecting one updates the store", () => {
     const store = createEditorStore(session());
@@ -422,7 +459,7 @@ describe("Play", () => {
     render(<App store={store} />);
     const play = screen.getByRole("button", { name: "Play" });
     expect(play).toHaveProperty("disabled", true);
-    expect(play.getAttribute("title")).toContain("Place a Start point first");
+    expect(play.getAttribute("title")).toContain("Place a start point first");
     act(() => {
       store.selectTool("spawn");
       store.placeObjectAt(1, 1);

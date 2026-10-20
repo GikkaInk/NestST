@@ -19,6 +19,7 @@ import {
   upsertDialogCommand,
 } from "@nestst/core";
 import { addNode, findFreeSpot } from "./dialogGraph.js";
+import { LABELS } from "./labels.js";
 import type {
   BackupFile,
   Command,
@@ -119,6 +120,15 @@ export function canPlay(
   s: Pick<EditorState, "project" | "currentMapId" | "mode"> & Partial<Pick<EditorState, "refProblems">>,
 ): boolean {
   return s.mode === "idle" && (s.refProblems?.length ?? 0) === 0 && playMapId(s) !== null;
+}
+
+/** Why Play is unavailable (broken references, no start point), or null when it works or there is no project. */
+export function playBlockedReason(
+  s: Pick<EditorState, "project" | "currentMapId" | "mode" | "refProblems">,
+): string | null {
+  if (s.project === null || s.mode !== "idle" || canPlay(s)) return null;
+  if (s.refProblems.length > 0) return LABELS.onboardingFixRefs;
+  return LABELS.noStartPoint;
 }
 
 /**

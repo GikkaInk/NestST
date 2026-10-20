@@ -3,7 +3,7 @@ import { MANIFEST_FILE, createEmptyProject, loadProject, saveProject } from "@ne
 import type { ProjectStorage, TileEdit } from "@nestst/core";
 import { MemoryStorage } from "@nestst/core/testing";
 import { getOnboardingSteps } from "./onboarding.js";
-import { canPlay, createEditorStore, defaultEventProps, isBusy, playMapId, strokeTile } from "./editorStore.js";
+import { canPlay, createEditorStore, defaultEventProps, isBusy, playBlockedReason, playMapId, strokeTile } from "./editorStore.js";
 import type { OpenedFolder, ProjectSession } from "./editorStore.js";
 
 /** Session whose pickers return the queued folders in order; `null` = cancelled. */
@@ -1376,5 +1376,20 @@ describe("newDialogForObject", () => {
     expect(store.newDialogForObject("missing")).toBeNull();
     expect(store.getState().project).toBe(before);
     expect(store.getState().error).toMatch(/^Could not create the dialog\. /);
+  });
+});
+
+describe("playBlockedReason", () => {
+  it("is null without a project", () => {
+    expect(playBlockedReason(createEditorStore(fakeSession()).getState())).toBeNull();
+  });
+
+  it("asks for a start point, then for fixed references, and is null when Play works", async () => {
+    const { store } = await storeWithNewProject();
+    expect(playBlockedReason(store.getState())).toBe("Place a start point first");
+    store.selectTool("spawn");
+    store.placeObjectAt(1, 1);
+    expect(playBlockedReason(store.getState())).toBeNull();
+    expect(playBlockedReason({ ...store.getState(), refProblems: ["x"] })).toBe("Fix the broken references first");
   });
 });

@@ -11,6 +11,16 @@ export const TOOL_LABELS: Record<Tool, string> = {
   select: "Select",
 };
 
+/** One-line explanation of each tool, shown above the map. */
+export const TOOL_HINTS: Record<Tool, string> = {
+  brush: "Brush: click or drag to paint the selected tile",
+  eraser: "Eraser: click or drag to wipe tiles away",
+  spawn: "Start point: this is where your hero appears",
+  npc: "Character: click a tile to add someone to talk to",
+  event: "Trigger tile: click a tile to make something happen there",
+  select: "Select: click an object to change its settings",
+};
+
 /** User-visible names of the event triggers. */
 export const TRIGGER_LABELS: Record<EventProps["trigger"], string> = {
   touch: "Steps on it",
@@ -22,7 +32,7 @@ export const LABELS = {
   solid: "Can't walk through",
   showSolid: "Show blocked tiles",
   trigger: "Trigger",
-  noStartPoint: "Place a Start point first",
+  noStartPoint: "Place a start point first",
   onboardingTitle: "First steps",
   onboardingAllSet: "All set!",
   onboardingShowAgain: "Show again",

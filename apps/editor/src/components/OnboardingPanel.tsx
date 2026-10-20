@@ -1,20 +1,12 @@
 import { useState } from "react";
-import { canPlay, playMapId } from "../editorStore.js";
-import type { EditorState, EditorStore } from "../editorStore.js";
+import { playBlockedReason } from "../editorStore.js";
+import type { EditorStore } from "../editorStore.js";
 import { canEditMode } from "../editorForms.js";
 import { LABELS, ONBOARDING_LABELS } from "../labels.js";
 import { allDone, findLineTarget, getOnboardingSteps } from "../onboarding.js";
 import type { OnboardingStepId } from "../onboarding.js";
 import { readOnboardingHidden, writeOnboardingHidden } from "../onboardingPrefs.js";
 import { useEditorState } from "../useEditorState.js";
-
-/** Why Play is unavailable, or null. Task 5 replaces this with the shared reason. */
-function playBlockedReason(s: EditorState): string | null {
-  if (canPlay(s)) return null;
-  if (playMapId(s) === null) return LABELS.noStartPoint;
-  if (s.refProblems.length > 0) return LABELS.onboardingFixRefs;
-  return null;
-}
 
 /** Collapsible "First steps" checklist shown above the map. */
 export function OnboardingPanel({ store }: { store: EditorStore }) {

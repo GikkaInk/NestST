@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { canPlay, isBusy } from "../editorStore.js";
+import { canPlay, isBusy, playBlockedReason } from "../editorStore.js";
 import type { EditorStore, Tool } from "../editorStore.js";
-import { LABELS, TOOL_LABELS } from "../labels.js";
+import { TOOL_LABELS } from "../labels.js";
 import { useEditorState } from "../useEditorState.js";
 import {
   IconBrush,
@@ -67,17 +67,11 @@ function ToolButton(props: {
   );
 }
 
-/** Why Play is off: broken references or a missing Start point. */
-function playHint(s: ReturnType<typeof useEditorState>): string | undefined {
-  if (canPlay(s) || s.project === null || s.mode !== "idle") return undefined;
-  if (s.refProblems.length > 0) return "Fix the broken references first";
-  return LABELS.noStartPoint;
-}
-
 export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   const s = useEditorState(store);
   const hasProject = s.project !== null;
   const playing = s.mode === "playing";
+  const playReason = playBlockedReason(s);
   const tools: Array<{ id: Tool; label: string; key: string; icon: ReactNode }> = [
     { id: "brush", label: TOOL_LABELS.brush, key: "B", icon: <IconBrush /> },
     { id: "eraser", label: TOOL_LABELS.eraser, key: "E", icon: <IconEraser /> },
@@ -108,11 +102,16 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
             className="tool-button tool-button--play"
             onClick={() => store.play()}
             disabled={!canPlay(s)}
-            hint={playHint(s)}
+            hint={playReason ?? undefined}
             showLabel
           >
             <IconPlay />
           </ToolButton>
+        )}
+        {playReason !== null && (
+          <span className="toolbar__reason" title={playReason}>
+            {playReason}
+          </span>
         )}
       </div>
       <div className="toolbar__group">
@@ -155,6 +154,7 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
             pressed={s.tool === t.id}
             onClick={() => store.selectTool(t.id)}
             disabled={!hasProject}
+            showLabel={t.id === "spawn" || t.id === "npc" || t.id === "event"}
           >
             {t.icon}
           </ToolButton>

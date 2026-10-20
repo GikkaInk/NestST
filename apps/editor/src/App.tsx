@@ -8,6 +8,7 @@ import { ErrorBanner } from "./components/ErrorBanner.js";
 import { PlayView } from "./components/PlayView.js";
 import { NoticeBanner } from "./components/NoticeBanner.js";
 import { RefProblemsBanner } from "./components/RefProblemsBanner.js";
+import { ToolHint } from "./components/ToolHint.js";
 import { MapEditor } from "./components/MapEditor.js";
 import { OnboardingPanel } from "./components/OnboardingPanel.js";
 import { ObjectInspector } from "./components/ObjectInspector.js";
@@ -166,6 +167,7 @@ export function App({ store }: { store: EditorStore }) {
             ) : (
               <div className="map-column">
                 <OnboardingPanel store={store} />
+                <ToolHint store={store} />
                 <MapEditor store={store} onZoomChange={setZoom} onControls={setControls} />
               </div>
             )}
