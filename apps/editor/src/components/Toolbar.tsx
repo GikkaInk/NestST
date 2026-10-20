@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { canPlay, isBusy } from "../editorStore.js";
 import type { EditorStore, Tool } from "../editorStore.js";
+import { LABELS, TOOL_LABELS } from "../labels.js";
 import { useEditorState } from "../useEditorState.js";
 import {
   IconBrush,
@@ -66,11 +67,11 @@ function ToolButton(props: {
   );
 }
 
-/** Why Play is off: broken references or a missing Spawn point. */
+/** Why Play is off: broken references or a missing Start point. */
 function playHint(s: ReturnType<typeof useEditorState>): string | undefined {
   if (canPlay(s) || s.project === null || s.mode !== "idle") return undefined;
   if (s.refProblems.length > 0) return "Fix the broken references first";
-  return "Place a Spawn point first";
+  return LABELS.noStartPoint;
 }
 
 export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
@@ -78,12 +79,12 @@ export function Toolbar({ store, zoom, zoomControls, onNew, onOpen }: Props) {
   const hasProject = s.project !== null;
   const playing = s.mode === "playing";
   const tools: Array<{ id: Tool; label: string; key: string; icon: ReactNode }> = [
-    { id: "brush", label: "Brush", key: "B", icon: <IconBrush /> },
-    { id: "eraser", label: "Eraser", key: "E", icon: <IconEraser /> },
-    { id: "spawn", label: "Spawn", key: "P", icon: <IconSpawn /> },
-    { id: "npc", label: "NPC", key: "N", icon: <IconNpc /> },
-    { id: "event", label: "Event", key: "T", icon: <IconEvent /> },
-    { id: "select", label: "Select", key: "V", icon: <IconSelect /> },
+    { id: "brush", label: TOOL_LABELS.brush, key: "B", icon: <IconBrush /> },
+    { id: "eraser", label: TOOL_LABELS.eraser, key: "E", icon: <IconEraser /> },
+    { id: "spawn", label: TOOL_LABELS.spawn, key: "P", icon: <IconSpawn /> },
+    { id: "npc", label: TOOL_LABELS.npc, key: "N", icon: <IconNpc /> },
+    { id: "event", label: TOOL_LABELS.event, key: "T", icon: <IconEvent /> },
+    { id: "select", label: TOOL_LABELS.select, key: "V", icon: <IconSelect /> },
   ];
   return (
     <div className="toolbar" role="toolbar" aria-label="Editor tools">

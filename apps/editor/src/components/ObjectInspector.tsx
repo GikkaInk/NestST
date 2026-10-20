@@ -1,6 +1,7 @@
 import type { Condition, EventAction, EventProps, MapObject } from "@nestst/core";
 import { canEditMode } from "../editorForms.js";
 import type { EditorStore } from "../editorStore.js";
+import { LABELS, TOOL_LABELS, TRIGGER_LABELS } from "../labels.js";
 import { useEditorState } from "../useEditorState.js";
 import { ActionListEditor } from "./ActionListEditor.js";
 import { ConditionEditor } from "./ConditionEditor.js";
@@ -24,7 +25,7 @@ export function ObjectInspector({ store }: { store: EditorStore }) {
 
   return (
     <aside className="inspector card" aria-label="Object properties" key={obj.id}>
-      <h2 className="panel-title">{obj.kind === "npc" ? "NPC" : "Event"}</h2>
+      <h2 className="panel-title">{obj.kind === "npc" ? TOOL_LABELS.npc : TOOL_LABELS.event}</h2>
       <Labeled label="Name">
         <CommitField label="Name" value={name} maxLength={60} disabled={disabled} onCommit={(name) => patch({ name })} />
       </Labeled>
@@ -68,14 +69,14 @@ function EventFields(props: {
   const ev = props.obj.props as unknown as EventProps;
   return (
     <>
-      <Labeled label="Trigger">
+      <Labeled label={LABELS.trigger}>
         <SelectField
-          label="Trigger"
+          label={LABELS.trigger}
           value={ev.trigger}
           disabled={disabled}
           options={[
-            { value: "touch", label: "Touch" },
-            { value: "interact", label: "Interact" },
+            { value: "touch", label: TRIGGER_LABELS.touch },
+            { value: "interact", label: TRIGGER_LABELS.interact },
           ]}
           onChange={(trigger) => patch({ trigger })}
         />

@@ -295,7 +295,7 @@ describe("App: Select and Event keys", () => {
     render(<App store={store} />);
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
     expect(store.getState().tool).toBe("select");
-    fireEvent.click(screen.getByRole("button", { name: "Event" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trigger tile" }));
     expect(store.getState().tool).toBe("event");
   });
 });

@@ -1,6 +1,7 @@
 import { isSolidTile } from "@nestst/core";
 import { builtinTileColor } from "@nestst/runtime";
 import type { EditorStore } from "../editorStore.js";
+import { LABELS, TOOL_LABELS } from "../labels.js";
 import { useEditorState } from "../useEditorState.js";
 
 /** The palette shows the first 32 built-in tiles (ids 1..32). */
@@ -28,7 +29,7 @@ export function Palette({ store }: { store: EditorStore }) {
           data-empty={tool === "eraser" || undefined}
           aria-hidden="true"
         />
-        <span>{tool === "eraser" ? "Eraser" : `Tile ${selectedTile}`}</span>
+        <span>{tool === "eraser" ? TOOL_LABELS.eraser : `Tile ${selectedTile}`}</span>
       </div>
       <div className="palette__walls">
         <button
@@ -40,7 +41,7 @@ export function Palette({ store }: { store: EditorStore }) {
           onClick={() => store.setTileSolid(selectedTile, !solid)}
         >
           <span className="check__box" aria-hidden="true" />
-          Blocks walking
+          {LABELS.solid}
         </button>
         <button
           type="button"
@@ -51,7 +52,7 @@ export function Palette({ store }: { store: EditorStore }) {
           onClick={() => store.toggleShowSolid()}
         >
           <span className="check__box" aria-hidden="true" />
-          Show walls
+          {LABELS.showSolid}
         </button>
       </div>
       <div className="palette__grid" role="group" aria-label="Choose a tile">

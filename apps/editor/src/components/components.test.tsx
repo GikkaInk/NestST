@@ -290,13 +290,13 @@ describe("Toolbar", () => {
   it("Spawn and NPC buttons select their tool", async () => {
     const store = await openStore();
     renderBar(store);
-    fireEvent.click(screen.getByRole("button", { name: "Spawn" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start point" }));
     expect(store.getState().tool).toBe("spawn");
-    expect(screen.getByRole("button", { name: "Spawn" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Start point" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Brush" }).getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: "NPC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Character" }));
     expect(store.getState().tool).toBe("npc");
-    expect(screen.getByRole("button", { name: "NPC" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Character" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("every button has a tooltip and the zoom is shown in percent", async () => {
@@ -339,7 +339,7 @@ describe("Palette: walls", () => {
     const store = await openStore();
     render(<Palette store={store} />);
     act(() => store.selectTile(5));
-    const box = screen.getByRole("checkbox", { name: "Blocks walking" });
+    const box = screen.getByRole("checkbox", { name: "Can't walk through" });
     expect(box.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(box);
     expect(store.getState().project!.manifest.solidTiles).toContain(5);
@@ -352,7 +352,7 @@ describe("Palette: walls", () => {
     const store = await openStore();
     render(<Palette store={store} />);
     act(() => store.selectTile(5));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Blocks walking" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Can't walk through" }));
     expect(screen.getByRole("button", { name: "Tile 5" }).hasAttribute("data-solid")).toBe(true);
     expect(screen.getByRole("button", { name: "Tile 6" }).hasAttribute("data-solid")).toBe(false);
   });
@@ -362,7 +362,7 @@ describe("Palette: walls", () => {
     render(<Palette store={store} />);
     act(() => store.selectTile(5));
     act(() => store.selectTool("eraser"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Blocks walking" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Can't walk through" }));
     expect(store.getState().tool).toBe("eraser");
     expect(store.getState().selectedTile).toBe(5);
     expect(store.getState().project!.manifest.solidTiles).toContain(5);
@@ -372,7 +372,7 @@ describe("Palette: walls", () => {
     const store = await openStore();
     const spy = vi.spyOn(store, "toggleShowSolid");
     render(<Palette store={store} />);
-    const sw = screen.getByRole("switch", { name: "Show walls" });
+    const sw = screen.getByRole("switch", { name: "Show blocked tiles" });
     expect(sw.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(sw);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -422,7 +422,7 @@ describe("Play", () => {
     render(<App store={store} />);
     const play = screen.getByRole("button", { name: "Play" });
     expect(play).toHaveProperty("disabled", true);
-    expect(play.getAttribute("title")).toContain("Place a Spawn point first");
+    expect(play.getAttribute("title")).toContain("Place a Start point first");
     act(() => {
       store.selectTool("spawn");
       store.placeObjectAt(1, 1);
@@ -603,8 +603,8 @@ describe("Play", () => {
     await flush();
     const tile = screen.getByRole("button", { name: "Tile 5" });
     expect(tile).toHaveProperty("disabled", true);
-    expect(screen.getByRole("checkbox", { name: /Blocks walking/ })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("switch", { name: /Show walls/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("checkbox", { name: /Can't walk through/ })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("switch", { name: /Show blocked tiles/ })).toHaveProperty("disabled", true);
     fireEvent.click(tile);
     expect(store.getState().selectedTile).not.toBe(5);
   });
